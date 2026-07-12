@@ -163,6 +163,7 @@ export function getPlayerView(game, viewerId) {
     log: state.log,
     lastProduction: sanitizeProduction(state.lastProduction, viewerId),
     lastRobbery: sanitizeRobbery(state.lastRobbery, viewerId),
+    lastDevelopment: state.lastDevelopment,
   };
 }
 

@@ -6,6 +6,7 @@ import RollOutcome from './RollOutcome.jsx';
 import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 import TradeControls from './TradeControls.jsx';
+import DevelopmentControls from './DevelopmentControls.jsx';
 
 function GameControlPanel(props) {
   const { game, playerView = null } = props;
@@ -24,6 +25,15 @@ function GameControlPanel(props) {
       />
       <RollOutcome game={game} playerView={playerView} />
       <TradeControls game={game} onAction={props.onTradeAction} />
+      <DevelopmentControls
+        game={game}
+        playerView={playerView}
+        onAction={props.onDevelopmentAction}
+        onBeginRoadBuilding={props.onBeginRoadBuilding}
+        selectedRoadCount={props.selectedRoadBuildingEdges.length}
+        onFinishRoadBuilding={props.onFinishRoadBuilding}
+        onCancelRoadBuilding={props.onCancelRoadBuilding}
+      />
       <div className="control-actions">
         <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll'}>Roll Dice</button>
         <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase}>End Turn</button>

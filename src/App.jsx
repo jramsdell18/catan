@@ -43,6 +43,7 @@ function App() {
   const [requestedMode, setRequestedMode] = useState(null);
   const [actionFeedback, setActionFeedback] = useState({ status: 'idle', message: '' });
   const [selectedRobberTileId, setSelectedRobberTileId] = useState(null);
+  const [selectedRoadBuildingEdges, setSelectedRoadBuildingEdges] = useState([]);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -95,8 +96,15 @@ function App() {
   }, [confirmedPlayers, currentPlayer, game]);
 
   const legalTargets = useMemo(
-    () => getLegalTargets(game, topology, board, interactionMode),
-    [board, game, interactionMode, topology],
+    () => {
+      if (interactionMode !== INTERACTION_MODES.ROAD_BUILDING || selectedRoadBuildingEdges.length === 0) {
+        return getLegalTargets(game, topology, board, interactionMode);
+      }
+      const preview = structuredClone(game);
+      selectedRoadBuildingEdges.forEach((edgeId) => { preview.board.edges[edgeId].road = game.currentPlayerId; });
+      return getLegalTargets(preview, topology, board, interactionMode);
+    },
+    [board, game, interactionMode, selectedRoadBuildingEdges, topology],
   );
   const placementOptions = useMemo(() => ({
     settlements: legalTargets.intersections,
@@ -116,6 +124,7 @@ function App() {
         setActionFeedback({ status: 'success', message: `Success: ${describeAction(action.type)}.` });
         setRequestedMode(null);
         if (action.type === 'moveRobber') setSelectedRobberTileId(null);
+        if (action.type === 'playDevelopment') setSelectedRoadBuildingEdges([]);
         return next;
       } catch (error) {
         setGameError(error.message);
@@ -128,6 +137,7 @@ function App() {
   const cancelInteraction = useCallback(() => {
     setRequestedMode(null);
     setSelectedRobberTileId(null);
+    setSelectedRoadBuildingEdges([]);
     setGameError('');
     setActionFeedback({ status: 'idle', message: 'Action cancelled.' });
   }, []);
@@ -137,6 +147,7 @@ function App() {
     setDiceRoll(null);
     setRequestedMode(null);
     setSelectedRobberTileId(null);
+    setSelectedRoadBuildingEdges([]);
     setActionFeedback({ status: 'idle', message });
   }
 
@@ -174,9 +185,20 @@ function App() {
         return;
       }
     }
+    if (interactionMode === INTERACTION_MODES.ROAD_BUILDING) {
+      const nextEdges = [...selectedRoadBuildingEdges, targetId];
+      const roadsRemaining = game.players.find((player) => player.id === game.currentPlayerId).pieces.roads;
+      if (nextEdges.length >= Math.min(2, roadsRemaining)) {
+        dispatch({ type: 'playDevelopment', playerId: game.currentPlayerId, card: 'roadBuilding', edgeIds: nextEdges });
+      } else {
+        setSelectedRoadBuildingEdges(nextEdges);
+        setActionFeedback({ status: 'idle', message: 'Select a second road or finish with one.' });
+      }
+      return;
+    }
     const action = actionForTarget(interactionMode, game, targetId);
     if (action) dispatch(action);
-  }, [dispatch, game, interactionMode]);
+  }, [dispatch, game, interactionMode, selectedRoadBuildingEdges]);
   const handlePlaceSettlement = useCallback((vertexId) => handleSelectTarget(vertexId), [handleSelectTarget]);
   const handlePlaceRoad = useCallback((edgeId) => handleSelectTarget(edgeId), [handleSelectTarget]);
 
@@ -193,6 +215,7 @@ function App() {
         roadOptions: placementOptions.roads.map((edge) => edge.id),
         hexOptions: legalTargets.hexes.map((hex) => hex.hexId),
         selectedRobberTileId,
+        selectedRoadBuildingEdges: [...selectedRoadBuildingEdges],
         eligibleRobberVictims: eligibleRobberVictims.map((player) => player.id),
         robberOptions: legalTargets.hexes.map((hex) => ({
           tileId: hex.hexId,
@@ -202,6 +225,11 @@ function App() {
         productionCandidates,
         lastProduction: game?.lastProduction ?? null,
         lastRobbery: game?.lastRobbery ?? null,
+        developmentDeckCount: game?.developmentDeck.length ?? 0,
+        developmentCards: game
+          ? Object.fromEntries(game.players.map((player) => [player.id, player.developmentCards.map((card) => ({ ...card }))]))
+          : null,
+        playedDevelopmentThisTurn: game?.playedDevelopmentThisTurn ?? false,
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
         cityCount: placements.cities.length,
@@ -267,6 +295,17 @@ function App() {
           return next;
         });
       },
+      giveDevelopmentCard: (playerId, type, boughtTurn = -1) => {
+        setGame((current) => {
+          if (!current) return current;
+          const next = structuredClone(current);
+          next.players.find((player) => player.id === playerId)?.developmentCards.push({ type, boughtTurn });
+          return next;
+        });
+      },
+      resetDevelopmentPlay: () => {
+        setGame((current) => current ? { ...structuredClone(current), playedDevelopmentThisTurn: false, phase: 'action' } : current);
+      },
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -281,7 +320,7 @@ function App() {
     game, gameError, handlePlaceRoad, handlePlaceSettlement, handleSelectTarget, interactionMode,
     legalTargets.hexes, placementOptions.roads, placementOptions.settlements, placements.cities.length,
     placements.roads.length, placements.settlements.length, playerInventories, playerView, productionCandidates,
-    selectedRobberTileId, topology, viewerId,
+    selectedRoadBuildingEdges, selectedRobberTileId, topology, viewerId,
   ]);
 
   return (
@@ -302,6 +341,7 @@ function App() {
           onSelectTarget={handleSelectTarget}
           diceRoll={diceRoll}
           productionTileIds={game?.lastProduction?.tiles.filter((tile) => tile.distributed && tile.demand > 0).map((tile) => tile.tileId) ?? []}
+          pendingRoadEdgeIds={selectedRoadBuildingEdges}
         />
         <LiveKitTableCall players={activePlayers} />
         {!game && (
@@ -346,6 +386,19 @@ function App() {
         })}
         onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
         onTradeAction={dispatch}
+        onDevelopmentAction={dispatch}
+        selectedRoadBuildingEdges={selectedRoadBuildingEdges}
+        onBeginRoadBuilding={() => {
+          setSelectedRoadBuildingEdges([]);
+          setRequestedMode(INTERACTION_MODES.ROAD_BUILDING);
+        }}
+        onFinishRoadBuilding={() => dispatch({
+          type: 'playDevelopment',
+          playerId: game.currentPlayerId,
+          card: 'roadBuilding',
+          edgeIds: selectedRoadBuildingEdges,
+        })}
+        onCancelRoadBuilding={cancelInteraction}
       />
     </main>
   );

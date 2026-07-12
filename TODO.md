@@ -128,16 +128,16 @@ Players can perform every legal bank, port, and player trade without directly ed
 
 ## Milestone 6: Development cards
 
-- [ ] Add a Buy Development Card control with its cost and availability.
-- [ ] Display development cards privately to their owner.
-- [ ] Indicate cards bought this turn that cannot yet be played.
-- [ ] Add the Knight workflow using the robber interaction mode.
-- [ ] Add resource selection for Year of Plenty.
-- [ ] Add resource selection for Monopoly.
-- [ ] Add one-or-two-road placement for Road Building.
-- [ ] Keep victory-point cards hidden while including them in scoring.
-- [ ] Enforce the one-development-card-per-turn rule in the UI.
-- [ ] Add UI integration tests for buying and playing every development-card type.
+- [x] Add a Buy Development Card control with its cost and availability.
+- [x] Display development cards privately to their owner.
+- [x] Indicate cards bought this turn that cannot yet be played.
+- [x] Add the Knight workflow using the robber interaction mode.
+- [x] Add resource selection for Year of Plenty.
+- [x] Add resource selection for Monopoly.
+- [x] Add one-or-two-road placement for Road Building.
+- [x] Keep victory-point cards hidden while including them in scoring.
+- [x] Enforce the one-development-card-per-turn rule in the UI.
+- [x] Add UI integration tests for buying and playing every development-card type.
 
 ### Done when
 

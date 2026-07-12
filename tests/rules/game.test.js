@@ -379,6 +379,7 @@ describe('development cards', () => {
     expect(game.phase).toBe('robber');
     expect(player(game, 'p1').playedKnights).toBe(1);
     expect(player(game, 'p1').developmentCards).toHaveLength(0);
+    expect(game.lastDevelopment).toMatchObject({ type: 'played', card: 'knight' });
   });
 
   it('plays year of plenty for two resources', () => {
@@ -395,6 +396,7 @@ describe('development cards', () => {
     });
     expect(player(game, 'p1').resources.wood).toBe(woodBefore + 1);
     expect(player(game, 'p1').resources.brick).toBe(player(completeSetup(newGame()), 'p1').resources.brick + 1);
+    expect(game.lastDevelopment).toMatchObject({ card: 'yearOfPlenty', resources: ['wood', 'brick'] });
   });
 
   it('plays monopoly and takes a resource from all opponents', () => {
@@ -414,6 +416,7 @@ describe('development cards', () => {
     expect(player(game, 'p1').resources.sheep).toBe(expectedSheep);
     expect(player(game, 'p2').resources.sheep).toBe(0);
     expect(player(game, 'p3').resources.sheep).toBe(0);
+    expect(game.lastDevelopment).toMatchObject({ card: 'monopoly', resource: 'sheep', collected: 5 });
   });
 
   it('plays road building for free roads', () => {
@@ -431,6 +434,7 @@ describe('development cards', () => {
     expect(game.board.edges.e5.road).toBe('p1');
     expect(game.board.edges.e7.road).toBe('p1');
     expect(player(game, 'p1').pieces.roads).toBe(roadsBefore - 2);
+    expect(game.lastDevelopment).toMatchObject({ card: 'roadBuilding', edgeIds: ['e5', 'e7'] });
     // Should not have spent wood/brick beyond setup holdings
   });
 
