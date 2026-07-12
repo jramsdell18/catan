@@ -111,6 +111,9 @@ test.describe('lobby and board controls', () => {
 
 test.describe('setup snake through production turn', () => {
   test('completes setup, grants starting resources, rolls, and ends turn', async ({ page }) => {
+    // Full setup snake + 3D scene is slower with stream/dice overlays on main.
+    test.setTimeout(90_000);
+
     await page.goto('/');
     await waitForTestApi(page);
     await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
@@ -141,30 +144,28 @@ test.describe('setup snake through production turn', () => {
     await expect(page.getByTestId('roll-dice')).toBeEnabled();
     await expect(page.getByTestId('end-turn')).toBeDisabled();
 
-    // Keep rolling until a non-7 production path lands in action (or rare robber/discard).
-    // With real Math.random, retry a few times after restarting only if stuck... simpler: click once
-    // and accept action/robber/discard; if action, end turn.
-    await page.getByTestId('roll-dice').click();
+    // Fixed non-7 dice via test API (same path as UI roll, but deterministic).
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.rollDice([2, 3]);
+    });
 
     await expect
-      .poll(async () => (await getTestState(page)).phase, { timeout: 5000 })
-      .not.toBe('roll');
+      .poll(async () => (await getTestState(page)).phase, { timeout: 10_000 })
+      .toBe('action');
 
     const afterRoll = await getTestState(page);
-    expect(['action', 'robber', 'discard']).toContain(afterRoll.phase);
-    await expect(page.getByTestId('last-roll')).toBeVisible();
+    expect(afterRoll.dice).toEqual([2, 3]);
+    await expect(page.getByTestId('last-roll')).toContainText('2 + 3 = 5');
 
-    if (afterRoll.phase === 'action') {
-      await expect(page.getByTestId('end-turn')).toBeEnabled();
-      await page.getByTestId('end-turn').click();
+    await expect(page.getByTestId('end-turn')).toBeEnabled();
+    await page.getByTestId('end-turn').click();
 
-      await expect
-        .poll(async () => (await getTestState(page)).phase, { timeout: 5000 })
-        .toBe('roll');
-      const afterEnd = await getTestState(page);
-      expect(afterEnd.currentPlayerId).toBe('blue');
-      await expect(page.getByTestId('player-state-blue')).toHaveAttribute('data-active', 'true');
-    }
+    await expect
+      .poll(async () => (await getTestState(page)).phase, { timeout: 10_000 })
+      .toBe('roll');
+    const afterEnd = await getTestState(page);
+    expect(afterEnd.currentPlayerId).toBe('blue');
+    await expect(page.getByTestId('player-state-blue')).toHaveAttribute('data-active', 'true');
   });
 
   test('restart game resets to a fresh setup phase', async ({ page }) => {

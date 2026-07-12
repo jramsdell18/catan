@@ -164,6 +164,7 @@ function App() {
         roadOptions: placementOptions.roads.map((edge) => edge.id),
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
+        dice: game?.dice ?? null,
         error: gameError || null,
         resources: game
           ? Object.fromEntries(
@@ -173,6 +174,18 @@ function App() {
       }),
       placeSettlement: handlePlaceSettlement,
       placeRoad: handlePlaceRoad,
+      /** Optional fixed dice for deterministic e2e (defaults to random via UI handler). */
+      rollDice: (dice) => {
+        if (game?.phase !== 'roll') {
+          return;
+        }
+        const values = dice ?? [rollDie(), rollDie()];
+        setDiceRoll((current) => ({
+          values,
+          rollId: (current?.rollId ?? 0) + 1,
+        }));
+        dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice: values });
+      },
     };
 
     return () => {
