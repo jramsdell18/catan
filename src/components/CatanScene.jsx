@@ -5,7 +5,9 @@ import plasticTextureUrl from '../assets/plastic.jpg';
 import woodTextureUrl from '../assets/wood.jpg';
 import {
   createCityMesh,
+  createDiceMesh,
   createHexTileMesh,
+  createPortMesh,
   createResourceCardMesh,
   createRoadHighlightMesh,
   createRoadMesh,
@@ -35,18 +37,39 @@ function disposeScene(scene) {
   });
 }
 
-function addTerrain(world, board) {
+function addTerrain(world, board, robberTileId) {
   board.hexes.forEach((hex) => {
     const tile = createHexTileMesh(hex);
     tile.position.set(hex.world.x, 0, hex.world.z);
     world.add(tile);
 
-    if (hex.hasRobber) {
+    if (hex.hexId === robberTileId) {
       const robber = createRobberMesh();
       robber.position.set(hex.world.x, 0.18, hex.world.z);
       world.add(robber);
     }
   });
+}
+
+function addPorts(world, ports, topology) {
+  const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]));
+  const portGroup = new THREE.Group();
+  portGroup.name = 'ports';
+
+  ports.forEach((port) => {
+    const [a, b] = port.intersections.map((id) => verticesById.get(id));
+    if (!a || !b) return;
+    const edgeX = (a.x + b.x) / 2;
+    const edgeZ = (a.z + b.z) / 2;
+    const distance = Math.hypot(edgeX, edgeZ) || 1;
+    const marker = createPortMesh(port);
+    marker.name = `${port.id}-${port.resource ?? 'generic'}`;
+    marker.position.set(edgeX + (edgeX / distance) * 0.7, 0.12, edgeZ + (edgeZ / distance) * 0.7);
+    marker.rotation.y = -Math.atan2(edgeZ, edgeX) + Math.PI / 2;
+    portGroup.add(marker);
+  });
+
+  world.add(portGroup);
 }
 
 function getPlayerColor(activePlayers, playerId) {
@@ -122,6 +145,19 @@ const CARD_AREA_WIDTH = 3.1;
 const CARD_WIDTH = 0.78;
 const CARD_MAX_SPACING = 0.36;
 const PLAYER_TABLE_SURFACE_Y = -0.22;
+const DIE_TABLE_SURFACE_Y = PLAYER_TABLE_SURFACE_Y + 0.33;
+const DICE_SPOTS = [
+  { x: -3.55, z: 6.05 },
+  { x: -2.72, z: 5.8 },
+];
+const DICE_TARGET_ROTATIONS = {
+  1: new THREE.Euler(0, 0, 0),
+  2: new THREE.Euler(-Math.PI / 2, 0, 0),
+  3: new THREE.Euler(0, 0, Math.PI / 2),
+  4: new THREE.Euler(0, 0, -Math.PI / 2),
+  5: new THREE.Euler(Math.PI / 2, 0, 0),
+  6: new THREE.Euler(Math.PI, 0, 0),
+};
 
 function createCardStack(cards) {
   const group = new THREE.Group();
@@ -232,6 +268,53 @@ function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) 
   world.add(rack);
 }
 
+function getDiceValues(diceRoll) {
+  return diceRoll?.values ?? [1, 1];
+}
+
+function addDiceArea(world, diceRoll, animatedDice) {
+  const diceGroup = new THREE.Group();
+  diceGroup.name = 'dice-area';
+
+  getDiceValues(diceRoll).forEach((value, index) => {
+    const spot = DICE_SPOTS[index];
+    const die = createDiceMesh();
+    const targetRotation = DICE_TARGET_ROTATIONS[value] ?? DICE_TARGET_ROTATIONS[1];
+    const targetPosition = new THREE.Vector3(spot.x, DIE_TABLE_SURFACE_Y, spot.z);
+
+    die.position.copy(targetPosition);
+    die.rotation.copy(targetRotation);
+
+    if (diceRoll?.rollId) {
+      const startPosition = new THREE.Vector3(
+        spot.x - 0.35 + index * 0.12,
+        DIE_TABLE_SURFACE_Y + 0.45,
+        spot.z + 0.35 + index * 0.12,
+      );
+      const startRotation = new THREE.Euler(
+        targetRotation.x + Math.PI * (4.5 + index),
+        targetRotation.y + Math.PI * (3.5 + index),
+        targetRotation.z + Math.PI * (5.5 + index),
+      );
+
+      die.position.copy(startPosition);
+      die.rotation.copy(startRotation);
+      animatedDice.push({
+        die,
+        startPosition,
+        targetPosition,
+        startRotation,
+        targetRotation,
+        duration: 1.05 + index * 0.16,
+      });
+    }
+
+    diceGroup.add(die);
+  });
+
+  world.add(diceGroup);
+}
+
 function CatanScene({
   board,
   activePlayers,
@@ -239,10 +322,13 @@ function CatanScene({
   playerInventories,
   cameraResetKey,
   topology,
+  ports,
+  robberTileId,
   placements,
   placementOptions,
   onPlaceSettlement,
   onPlaceRoad,
+  diceRoll,
 }) {
   const containerRef = useRef(null);
   const cameraStateRef = useRef(null);
@@ -307,6 +393,7 @@ function CatanScene({
     const sceneTextureSettleMs = 1500;
     let loadedSceneTextures = 0;
     let sceneTexturesReadyAt = null;
+    const animatedDice = [];
 
     function markSceneTextureReady() {
       loadedSceneTextures += 1;
@@ -377,15 +464,21 @@ function CatanScene({
     boardTable.receiveShadow = true;
     world.add(boardTable);
 
-    addTerrain(world, board);
+    addTerrain(world, board, robberTileId);
+    addPorts(world, ports, topology);
     addPlacedPieces(world, activePlayers, topology, placements);
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
+    addDiceArea(world, diceRoll, animatedDice);
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
+      numberTokens: board.hexes.filter((hex) => hex.number !== null).length,
+      ports: ports.length,
+      robberTileId,
       players: activePlayers.length,
+      dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
     };
 
@@ -463,6 +556,19 @@ function CatanScene({
           highlight.material.opacity = 0.62 + Math.sin(elapsed * 4) * 0.16;
         }
       });
+      animatedDice.forEach((animation) => {
+        const progress = Math.min(elapsed / animation.duration, 1);
+        const eased = 1 - (1 - progress) ** 3;
+        const bounce = Math.sin(progress * Math.PI) * 0.42 * (1 - progress * 0.25);
+
+        animation.die.position.lerpVectors(animation.startPosition, animation.targetPosition, eased);
+        animation.die.position.y += bounce;
+        animation.die.rotation.set(
+          THREE.MathUtils.lerp(animation.startRotation.x, animation.targetRotation.x, eased),
+          THREE.MathUtils.lerp(animation.startRotation.y, animation.targetRotation.y, eased),
+          THREE.MathUtils.lerp(animation.startRotation.z, animation.targetRotation.z, eased),
+        );
+      });
 
       controls.update();
       renderer.render(scene, camera);
@@ -509,12 +615,15 @@ function CatanScene({
     activePlayers,
     board,
     cameraResetKey,
+    diceRoll,
     onPlaceRoad,
     onPlaceSettlement,
     placementOptions,
     placements,
     playerInventories,
+    ports,
     resourceHands,
+    robberTileId,
     topology,
   ]);
 

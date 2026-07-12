@@ -72,7 +72,6 @@ function hasAdjacentRedNumbers(hexes) {
 
 function assignNumberTokens(hexes, random) {
   const nonDesertHexes = hexes.filter((hex) => hex.terrainId !== 'desert');
-  let bestAssignment = nonDesertHexes;
 
   for (let attempt = 0; attempt < 1000; attempt += 1) {
     const numberTokens = shuffle(NUMBER_TOKENS, random);
@@ -81,19 +80,16 @@ function assignNumberTokens(hexes, random) {
       number: numberTokens[index],
     }));
 
-    bestAssignment = assignedHexes;
-
     if (!hasAdjacentRedNumbers(assignedHexes)) {
-      break;
+      const numbersByHexId = new Map(assignedHexes.map((hex) => [hex.hexId, hex.number]));
+      return hexes.map((hex) => ({
+        ...hex,
+        number: hex.terrainId === 'desert' ? null : numbersByHexId.get(hex.hexId),
+      }));
     }
   }
 
-  const numbersByHexId = new Map(bestAssignment.map((hex) => [hex.hexId, hex.number]));
-
-  return hexes.map((hex) => ({
-    ...hex,
-    number: hex.terrainId === 'desert' ? null : numbersByHexId.get(hex.hexId),
-  }));
+  throw new Error('Unable to generate a board without adjacent 6 and 8 number tokens.');
 }
 
 export function createRandomBoard(seed = Date.now()) {

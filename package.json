@@ -9,10 +9,15 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit:rules": "vitest run tests/rules",
+    "test:unit:game": "vitest run tests/game",
     "test:rules": "node --test tests/board-rules.test.js",
-    "test:render": "playwright test",
-    "test:all": "npm run test && npm run test:rules && npm run test:render"
+    "test:e2e": "playwright test",
+    "test:e2e:flow": "playwright test tests/game-flow.spec.js",
+    "test:render": "playwright test tests/three-render.spec.js",
+    "test:all": "npm run test && npm run test:rules && npm run test:e2e"
   },
+
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

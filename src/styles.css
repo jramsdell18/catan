@@ -25,6 +25,7 @@ body {
 }
 
 button,
+input,
 select {
   font: inherit;
 }
@@ -58,11 +59,13 @@ button:disabled {
 }
 
 button:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: 3px solid #d9a441;
   outline-offset: 3px;
 }
 
+input,
 select {
   width: 100%;
   min-height: 44px;
@@ -110,7 +113,7 @@ select {
   z-index: 5;
   display: grid;
   width: min(calc(100% - 2rem), 28rem);
-  gap: 1.25rem;
+  gap: 1rem;
   border: 1px solid rgba(23, 33, 29, 0.18);
   border-radius: 8px;
   padding: 1.4rem;
@@ -186,6 +189,19 @@ h1 {
   gap: 0.65rem;
 }
 
+.table-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.seed-value {
+  margin: 0;
+  color: #17211d;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .resource-strip {
   display: grid;
   grid-auto-flow: column;
@@ -218,13 +234,80 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.video-call-panel {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  top: max(1rem, env(safe-area-inset-top));
+  z-index: 8;
+  display: grid;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(28rem, calc(100dvh - 2rem));
+  overflow: hidden;
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 250, 239, 0.92);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+.video-call-panel-active {
+  aspect-ratio: 1;
+  padding: 0;
+  background: #17211d;
+}
+
+.video-join-card {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.video-join-card h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.video-join-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.video-name-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.video-name-field label {
+  font-weight: 800;
+}
+
+.video-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #17211d;
+}
+
+.video-frame iframe {
+  display: block;
+}
+
+.call-status {
+  min-height: 1.3rem;
+  margin: 0;
+  color: #43534c;
+  line-height: 1.35;
+}
+
 @media (min-width: 620px) {
   .start-overlay {
     padding: 1.75rem;
   }
 
   .start-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: end;
   }
 
@@ -243,7 +326,7 @@ h1 {
   }
 
   .game-control-panel {
-    grid-template-columns: minmax(18rem, 0.9fr) minmax(28rem, 1fr);
+    grid-template-columns: minmax(18rem, 0.8fr) minmax(28rem, 1fr) minmax(14rem, 0.7fr);
     align-items: start;
     padding-top: 1rem;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
@@ -253,7 +336,32 @@ h1 {
     grid-column: 2;
   }
 
+  .table-meta {
+    grid-column: 3;
+    grid-template-columns: 1fr;
+  }
+
   .resource-strip {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .start-overlay {
+    width: min(calc(100% - 2rem), 24rem);
+  }
+
+  .table-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .video-call-panel {
+    top: auto;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    width: min(13rem, calc(100vw - 2rem));
+  }
+
+  .video-call-panel:not(.video-call-panel-active) {
+    display: none;
   }
 }
