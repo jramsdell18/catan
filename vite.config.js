@@ -10,6 +10,7 @@ export default defineConfig({
     include: ['react', 'react-dom/client', 'three', 'three/examples/jsm/controls/OrbitControls.js'],
   },
   test: {
-    include: ['tests/rules/**/*.test.js'],
+    // Vitest unit suites only — keep board-rules (node:test) and Playwright specs out
+    include: ['tests/rules/**/*.test.js', 'tests/game/**/*.test.js'],
   },
 });
