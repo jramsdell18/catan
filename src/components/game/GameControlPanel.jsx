@@ -7,11 +7,12 @@ import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 
 function GameControlPanel(props) {
-  const { game } = props;
+  const { game, playerView = null } = props;
   const actionPhase = game?.phase === 'action';
   return (
     <section className="game-control-panel" aria-label="Game controls">
       <TurnSummary {...props} />
+      {/* Discard forms need full hands on a shared device; keep authoritative game here. */}
       <RobberWorkflow
         game={game}
         selectedTileId={props.selectedRobberTileId}
@@ -20,7 +21,7 @@ function GameControlPanel(props) {
         onSelectVictim={props.onSelectVictim}
         onChooseDifferentHex={props.onChooseDifferentRobberHex}
       />
-      <RollOutcome game={game} />
+      <RollOutcome game={game} playerView={playerView} />
       <div className="control-actions">
         <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll'}>Roll Dice</button>
         <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase}>End Turn</button>
@@ -43,7 +44,7 @@ function GameControlPanel(props) {
         </button>
       </div>
       <TableMeta game={game} boardSeed={props.boardSeed} currentPlayer={props.currentPlayer} totalCards={props.totalCards} />
-      <ResourceStrip game={game} />
+      <ResourceStrip game={game} playerView={playerView} />
       <ActionHistory game={game} />
     </section>
   );

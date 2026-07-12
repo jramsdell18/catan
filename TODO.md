@@ -162,10 +162,11 @@ A local game can proceed from setup through a rules-validated victory without un
 ## Milestone 8: Local-game privacy and persistence
 
 - [ ] Add a pass-device screen between local players.
-- [x] Hide resource identities belonging to other players. *(via `getPlayerView`; UI wiring later)*
-- [x] Hide development cards belonging to other players. *(via `getPlayerView`; UI wiring later)*
+- [x] Hide resource identities belonging to other players. *(engine view + ResourceStrip)*
+- [x] Hide development cards belonging to other players. *(engine view; private hand UI later)*
 - [ ] Require confirmation before revealing the active player's private view.
 - [x] Implement `getPlayerView(game, playerId)` as the shared state-sanitization boundary.
+- [x] Wire seat view into UI (`usePlayerView` → ResourceStrip / RollOutcome).
 - [ ] Add save and resume support for a local game.
 - [x] Add tests that private cards never appear in another player's view.
 

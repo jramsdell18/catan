@@ -319,6 +319,13 @@ test.describe('setup snake through production turn', () => {
     expect(afterRobbery.robberTileId).toBe(target.tileId);
     await expect.poll(async () => page.evaluate(() => window.__CATAN_SCENE_STATS.robberTileId)).toBe(target.tileId);
     expect(Object.values(afterRobbery.resources[victimId]).reduce((sum, amount) => sum + amount, 0)).toBe(victimTotalBefore - 1);
-    await expect(page.getByTestId('roll-outcome')).toContainText('lost one hidden resource');
+    // Viewer is the active thief: private view may name the stolen resource.
+    await expect(page.getByTestId('roll-outcome')).toContainText('lost');
+    await expect
+      .poll(async () => (await getTestState(page)).playerView?.viewerId, { timeout: 10_000 })
+      .toBe('red');
+    const viewAfterRob = (await getTestState(page)).playerView;
+    expect(viewAfterRob.players.find((player) => player.id === 'blue').hasResourceBreakdown).toBe(false);
+    expect(viewAfterRob.players.find((player) => player.id === 'red').hasResourceBreakdown).toBe(true);
   });
 });

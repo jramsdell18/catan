@@ -78,14 +78,17 @@ function sanitizeRobbery(lastRobbery, viewerId) {
     lastRobbery.victimId === viewerId ||
     lastRobbery.playerId === viewerId;
 
-  // Support both current and future robbery payload shapes.
-  const resource = lastRobbery.resource ?? lastRobbery.stolen ?? null;
+  const resource =
+    lastRobbery.stolenResource ?? lastRobbery.resource ?? lastRobbery.stolen ?? null;
+
   if (involved || resource == null) {
     return copy(lastRobbery);
   }
 
+  // Bystanders learn that a card moved, not which resource.
   return {
     ...copy(lastRobbery),
+    stolenResource: null,
     resource: null,
     stolen: null,
     hidden: true,
@@ -96,11 +99,23 @@ function sanitizeProduction(lastProduction, viewerId) {
   if (!lastProduction) return null;
 
   const production = copy(lastProduction);
+
+  // Engine shape: { total, tiles, gains: { [playerId]: { resource: amount } } }
+  if (production.gains && typeof production.gains === 'object') {
+    production.gains = Object.fromEntries(
+      Object.entries(production.gains).map(([playerId, bundle]) => {
+        if (playerId === viewerId) return [playerId, bundle];
+        const count = Object.values(bundle ?? {}).reduce((sum, amount) => sum + amount, 0);
+        return [playerId, { hiddenCount: count }];
+      }),
+    );
+  }
+
+  // Older/alternate shape support
   if (production.byPlayer && typeof production.byPlayer === 'object') {
     production.byPlayer = Object.fromEntries(
       Object.entries(production.byPlayer).map(([playerId, bundle]) => {
         if (playerId === viewerId) return [playerId, bundle];
-        // Opponents only learn how many cards someone gained, not which resources.
         const count =
           typeof bundle === 'number'
             ? bundle
@@ -109,6 +124,8 @@ function sanitizeProduction(lastProduction, viewerId) {
       }),
     );
   }
+
+  // Tile list may name resources (public terrain knowledge) — keep as-is for UI warnings.
   return production;
 }
 

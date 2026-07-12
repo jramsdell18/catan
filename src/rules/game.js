@@ -238,7 +238,12 @@ function moveRobber(state, action, random) {
     victim.resources[stolen] -= 1;
     currentPlayer(state).resources[stolen] += 1;
   }
-  state.lastRobbery = { tileId: action.tileId, victimId: action.victimId ?? null, stolenResource: stolen };
+  state.lastRobbery = {
+    tileId: action.tileId,
+    thiefId: action.playerId,
+    victimId: action.victimId ?? null,
+    stolenResource: stolen,
+  };
   state.phase = 'action';
 }
 

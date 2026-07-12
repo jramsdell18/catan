@@ -21,8 +21,9 @@ import {
   playerInventoriesFromGame,
   resourceHandsFromGame,
 } from './game/rulesAdapter.js';
+import { usePlayerView } from './game/usePlayerView.js';
 import { createBoardTopology } from './game/topology.js';
-import { applyAction, createGame, TERRAIN_RESOURCE } from './rules/index.js';
+import { applyAction, createGame, getPlayerView, TERRAIN_RESOURCE } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
@@ -54,6 +55,9 @@ function App() {
     [activePlayers, game],
   );
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
+  // Local hot-seat: view the board as the active player (pass-and-play can override later).
+  const viewerId = game?.currentPlayerId ?? null;
+  const playerView = usePlayerView(game, viewerId);
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
   const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
   const interactionMode = getInteractionMode(game, requestedMode);
@@ -209,9 +213,33 @@ function App() {
         interactionMode,
         feedback: { ...actionFeedback },
         logLength: game?.log.length ?? 0,
+        viewerId,
+        // Full hands for deterministic e2e; UI rendering uses playerView.
         resources: game
           ? Object.fromEntries(game.players.map((player) => [player.id, { ...player.resources }]))
           : null,
+        // Build a summary from authoritative state so tests do not depend on hook timing.
+        playerView: (() => {
+          try {
+            if (!game?.currentPlayerId) return null;
+            const view = getPlayerView(game, game.currentPlayerId);
+            return {
+              viewerId: view.viewerId,
+              players: view.players.map((player) => ({
+                id: player.id,
+                isSelf: player.isSelf,
+                resourceCount: player.resourceCount,
+                developmentCardCount: player.developmentCardCount,
+                hasResourceBreakdown: player.resources != null,
+                hasDevCards: player.developmentCards != null,
+                publicVictoryPoints: player.publicVictoryPoints,
+                privateVictoryPoints: player.privateVictoryPoints,
+              })),
+            };
+          } catch (error) {
+            return { error: error.message };
+          }
+        })(),
       }),
       placeSettlement: handlePlaceSettlement,
       placeRoad: handlePlaceRoad,
@@ -252,8 +280,8 @@ function App() {
     eligibleRobberVictims,
     game, gameError, handlePlaceRoad, handlePlaceSettlement, handleSelectTarget, interactionMode,
     legalTargets.hexes, placementOptions.roads, placementOptions.settlements, placements.cities.length,
-    placements.roads.length, placements.settlements.length, playerInventories, productionCandidates,
-    selectedRobberTileId, topology,
+    placements.roads.length, placements.settlements.length, playerInventories, playerView, productionCandidates,
+    selectedRobberTileId, topology, viewerId,
   ]);
 
   return (
@@ -289,6 +317,7 @@ function App() {
 
       <GameControlPanel
         game={game}
+        playerView={playerView}
         playerMessage={playerMessage}
         diceTotal={diceTotal}
         totalCards={totalCards}

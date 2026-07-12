@@ -143,37 +143,39 @@ describe('getPlayerView', () => {
     const game = seedPrivateHands(newGame());
     const withRobbery = structuredClone(game);
     withRobbery.lastRobbery = {
+      tileId: 't-hills-8',
       thiefId: 'p1',
       victimId: 'p2',
-      resource: 'ore',
+      stolenResource: 'ore',
     };
 
     const thiefView = getPlayerView(withRobbery, 'p1');
-    expect(thiefView.lastRobbery.resource).toBe('ore');
+    expect(thiefView.lastRobbery.stolenResource).toBe('ore');
 
     const victimView = getPlayerView(withRobbery, 'p2');
-    expect(victimView.lastRobbery.resource).toBe('ore');
+    expect(victimView.lastRobbery.stolenResource).toBe('ore');
 
     const bystanderView = getPlayerView(withRobbery, 'p3');
-    expect(bystanderView.lastRobbery.resource).toBeNull();
+    expect(bystanderView.lastRobbery.stolenResource).toBeNull();
     expect(bystanderView.lastRobbery.hidden).toBe(true);
     expect(JSON.stringify(bystanderView.lastRobbery)).not.toMatch(/"ore"/);
   });
 
-  it('redacts other players resource bundles in lastProduction when present', () => {
+  it('redacts other players resource bundles in lastProduction.gains when present', () => {
     const game = seedPrivateHands(newGame());
     const withProduction = structuredClone(game);
     withProduction.lastProduction = {
       total: 6,
-      byPlayer: {
-        p1: { wood: 1, brick: 0, ore: 0, hay: 0, sheep: 0 },
-        p2: { wood: 0, brick: 2, ore: 0, hay: 0, sheep: 0 },
+      tiles: [],
+      gains: {
+        p1: { wood: 1 },
+        p2: { brick: 2 },
       },
     };
 
     const view = getPlayerView(withProduction, 'p1');
-    expect(view.lastProduction.byPlayer.p1).toEqual({ wood: 1, brick: 0, ore: 0, hay: 0, sheep: 0 });
-    expect(view.lastProduction.byPlayer.p2).toEqual({ hiddenCount: 2 });
-    expect(JSON.stringify(view.lastProduction.byPlayer.p2)).not.toContain('brick');
+    expect(view.lastProduction.gains.p1).toEqual({ wood: 1 });
+    expect(view.lastProduction.gains.p2).toEqual({ hiddenCount: 2 });
+    expect(JSON.stringify(view.lastProduction.gains.p2)).not.toContain('brick');
   });
 });

@@ -92,6 +92,17 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 .player-state strong,
 .player-state span { min-width: 0; overflow-wrap: anywhere; }
 
+.player-state .public-vp {
+  color: #5d6b64;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.player-state[data-private='true'] [data-testid^='player-resources-'] {
+  color: #5d6b64;
+  font-style: italic;
+}
+
 .interaction-status {
   display: grid;
   gap: 0.45rem;
