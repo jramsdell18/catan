@@ -44,6 +44,7 @@ export function createHexTileMesh(hex, radius = 1) {
 export function createRoadMesh(color) {
   const group = new THREE.Group();
   const road = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.12, 0.2), makeMaterial(color));
+  road.scale.setScalar(0.6);
   road.position.y = 0.12;
   road.castShadow = true;
   group.add(road);
@@ -62,7 +63,38 @@ export function createSettlementMesh(color) {
   roof.castShadow = true;
 
   group.add(body, roof);
+  group.scale.setScalar(0.75);
   return group;
+}
+
+export function createSettlementHighlightMesh(color = '#f7dc6f') {
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.45,
+    transparent: true,
+    opacity: 0.72,
+    roughness: 0.4,
+  });
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 24), material);
+  mesh.castShadow = true;
+
+  return mesh;
+}
+
+export function createRoadHighlightMesh(length, color = '#f7dc6f') {
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.45,
+    transparent: true,
+    opacity: 0.72,
+    roughness: 0.4,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, length * 0.86), material);
+  mesh.castShadow = true;
+
+  return mesh;
 }
 
 export function createCityMesh(color) {
@@ -81,6 +113,7 @@ export function createCityMesh(color) {
   roof.castShadow = true;
 
   group.add(base, tower, roof);
+  group.scale.setScalar(0.75);
   return group;
 }
 

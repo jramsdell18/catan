@@ -4,8 +4,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   createCityMesh,
   createHexTileMesh,
+  createRoadHighlightMesh,
   createRoadMesh,
   createRobberMesh,
+  createSettlementHighlightMesh,
   createSettlementMesh,
 } from '../three/meshFactories.js';
 
@@ -44,13 +46,73 @@ function addTerrain(world, board) {
   });
 }
 
+function getPlayerColor(activePlayers, playerId) {
+  return activePlayers.find((player) => player.id === playerId)?.color ?? '#ffffff';
+}
+
+function addPlacedPieces(world, activePlayers, topology, placements) {
+  const placedGroup = new THREE.Group();
+  placedGroup.name = 'placed-setup-pieces';
+
+  placements.settlements.forEach((settlement) => {
+    const vertex = topology.vertices.find((item) => item.id === settlement.vertexId);
+
+    if (!vertex) {
+      return;
+    }
+
+    const piece = createSettlementMesh(getPlayerColor(activePlayers, settlement.playerId));
+    piece.position.set(vertex.x, 0.12, vertex.z);
+    placedGroup.add(piece);
+  });
+
+  placements.roads.forEach((roadPlacement) => {
+    const edge = topology.edges.find((item) => item.id === roadPlacement.edgeId);
+
+    if (!edge) {
+      return;
+    }
+
+    const road = createRoadMesh(getPlayerColor(activePlayers, roadPlacement.playerId));
+    road.position.set(edge.x, 0.16, edge.z);
+    road.rotation.y = edge.rotation + Math.PI / 2;
+    placedGroup.add(road);
+  });
+
+  world.add(placedGroup);
+}
+
+function addPlacementHighlights(world, placementOptions, interactionTargets) {
+  const highlights = new THREE.Group();
+  highlights.name = 'placement-highlights';
+
+  placementOptions.settlements.forEach((vertex) => {
+    const highlight = createSettlementHighlightMesh();
+    highlight.position.set(vertex.x, 0.28, vertex.z);
+    highlight.userData = { placementType: 'settlement', id: vertex.id };
+    interactionTargets.push(highlight);
+    highlights.add(highlight);
+  });
+
+  placementOptions.roads.forEach((edge) => {
+    const highlight = createRoadHighlightMesh(edge.length);
+    highlight.position.set(edge.x, 0.3, edge.z);
+    highlight.rotation.y = edge.rotation;
+    highlight.userData = { placementType: 'road', id: edge.id };
+    interactionTargets.push(highlight);
+    highlights.add(highlight);
+  });
+
+  world.add(highlights);
+}
+
 const PLAYER_RACK_SPOTS = [
-  { x: 0, z: 4.65, rotation: 0 },
-  { x: 0, z: -4.65, rotation: Math.PI },
-  { x: -4.85, z: 0, rotation: -Math.PI / 2 },
-  { x: 4.85, z: 0, rotation: Math.PI / 2 },
-  { x: -3.55, z: -3.55, rotation: -Math.PI * 0.75 },
-  { x: 3.55, z: 3.55, rotation: Math.PI * 0.25 },
+  { x: 0, z: 6.75, rotation: 0 },
+  { x: 0, z: -6.75, rotation: Math.PI },
+  { x: -6.75, z: 0, rotation: -Math.PI / 2 },
+  { x: 6.75, z: 0, rotation: Math.PI / 2 },
+  { x: -5.85, z: -5.85, rotation: -Math.PI * 0.75 },
+  { x: 5.85, z: 5.85, rotation: Math.PI * 0.25 },
 ];
 
 function createPlayerPieceRack(player) {
@@ -66,7 +128,6 @@ function createPlayerPieceRack(player) {
 
   const city = createCityMesh(player.color);
   city.position.set(0.5, 0, 0);
-  city.scale.setScalar(0.92);
 
   playerGroup.add(road, settlement, city);
 
@@ -89,7 +150,16 @@ function addPieceRack(world, activePlayers) {
   world.add(rack);
 }
 
-function CatanScene({ board, activePlayers, cameraResetKey }) {
+function CatanScene({
+  board,
+  activePlayers,
+  cameraResetKey,
+  topology,
+  placements,
+  placementOptions,
+  onPlaceSettlement,
+  onPlaceRoad,
+}) {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -122,8 +192,8 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 5;
-    controls.maxDistance = 13;
+    controls.minDistance = 6;
+    controls.maxDistance = 18;
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.target.set(0, 0.2, 0.3);
 
@@ -140,17 +210,30 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
     const world = new THREE.Group();
     world.name = 'catan-world';
     scene.add(world);
+    const interactionTargets = [];
+    const animatedHighlights = [];
 
-    const table = new THREE.Mesh(
+    const playerTable = new THREE.Mesh(
+      new THREE.BoxGeometry(15, 0.12, 15),
+      new THREE.MeshStandardMaterial({ color: '#7a4b2a', roughness: 0.86 }),
+    );
+    playerTable.position.y = -0.28;
+    playerTable.receiveShadow = true;
+    world.add(playerTable);
+
+    const boardTable = new THREE.Mesh(
       new THREE.CylinderGeometry(5.8, 5.8, 0.08, 6),
       new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 }),
     );
-    table.rotation.y = Math.PI / 6;
-    table.position.y = -0.18;
-    table.receiveShadow = true;
-    world.add(table);
+    boardTable.rotation.y = Math.PI / 6;
+    boardTable.position.y = -0.16;
+    boardTable.receiveShadow = true;
+    world.add(boardTable);
 
     addTerrain(world, board);
+    addPlacedPieces(world, activePlayers, topology, placements);
+    addPlacementHighlights(world, placementOptions, interactionTargets);
+    animatedHighlights.push(...interactionTargets);
     addPieceRack(world, activePlayers);
     window.__CATAN_SCENE_STATS = {
       renderId,
@@ -169,7 +252,7 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 9.6 : 8.2, isNarrow ? 9.8 : 8.4);
+      camera.position.set(0, isNarrow ? 12.5 : 10.8, isNarrow ? 12.6 : 11.4);
       camera.lookAt(controls.target);
       controls.update();
     }
@@ -178,10 +261,52 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
     resizeObserver.observe(container);
     resize();
 
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function handlePointerDown(event) {
+      if (interactionTargets.length === 0) {
+        return;
+      }
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      const [hit] = raycaster.intersectObjects(interactionTargets, true);
+      const placement = hit?.object?.userData;
+
+      if (!placement) {
+        return;
+      }
+
+      if (placement.placementType === 'settlement') {
+        onPlaceSettlement(placement.id);
+      }
+
+      if (placement.placementType === 'road') {
+        onPlaceRoad(placement.id);
+      }
+    }
+
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+
     let animationId = 0;
     let renderedFrames = 0;
+    const clock = new THREE.Clock();
 
     function animate() {
+      const elapsed = clock.getElapsedTime();
+      const pulse = 1 + Math.sin(elapsed * 4) * 0.08;
+      animatedHighlights.forEach((highlight) => {
+        highlight.scale.setScalar(pulse);
+
+        if (highlight.material) {
+          highlight.material.opacity = 0.62 + Math.sin(elapsed * 4) * 0.16;
+        }
+      });
+
       controls.update();
       renderer.render(scene, camera);
       renderedFrames += 1;
@@ -204,6 +329,7 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
 
     return () => {
       window.cancelAnimationFrame(animationId);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       resizeObserver.disconnect();
       controls.dispose();
       if (window.__CATAN_ACTIVE_RENDER_ID === renderId) {
@@ -213,7 +339,16 @@ function CatanScene({ board, activePlayers, cameraResetKey }) {
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [activePlayers, board, cameraResetKey]);
+  }, [
+    activePlayers,
+    board,
+    cameraResetKey,
+    onPlaceRoad,
+    onPlaceSettlement,
+    placementOptions,
+    placements,
+    topology,
+  ]);
 
   return <div ref={containerRef} className="catan-scene" aria-label="3D Catan board sandbox" />;
 }

@@ -38,6 +38,11 @@ button:hover {
   background: #185860;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .secondary-button {
   color: #17211d;
   background: #e4d8be;
@@ -241,7 +246,7 @@ select {
   }
 
   .debug-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   h1 {
