@@ -1,6 +1,6 @@
 # Catan Multiplayer Starter
 
-Simple React starter for a local multiplayer Catan-style game.
+React + Three.js starter for a local multiplayer Catan-style game.
 
 ## Run locally
 
@@ -9,24 +9,54 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. The first screen asks for the number of players and prints the confirmed player count into the game setup space.
+Open the local URL printed by Vite. The current screen lets you pick a player count, inspect a 3D board, and randomize the terrain layout.
 
 ## Scripts
 
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
+- `npm run test:render` runs Playwright checks that the 3D board renders on desktop and mobile viewports.
 
 ## Project layout
 
 ```text
 src/
   components/
-    BoardPreview.jsx
+    CatanScene.jsx
     PlayerSetup.jsx
+  game/
+    board.js
+    pieces.js
+    terrain.js
+  three/
+    meshFactories.js
   App.jsx
   main.jsx
   styles.css
 ```
 
 The UI is mobile-first so it has a reasonable starting point for small screens before adding more game features.
+
+## 3D board plan
+
+1. Board data
+   - Keep terrain counts and resource mapping in `src/game/terrain.js`.
+   - Generate the 19 base-game hex slots in `src/game/board.js` using the 3-4-5-4-3 island shape.
+   - Randomize terrain from a deck so each board always has the correct counts.
+
+2. Piece data
+   - Keep player colors and piece inventory in `src/game/pieces.js`.
+   - Roads, settlements, and cities use a `player.color` attribute so the same mesh definition can render for any player.
+   - The robber is a neutral piece and starts on the desert.
+
+3. Rendering
+   - Keep Three.js primitive mesh creation in `src/three/meshFactories.js`.
+   - Keep React scene lifecycle and camera controls in `src/components/CatanScene.jsx`.
+   - Start with clean primitive meshes, then replace or enhance the factories later with custom models.
+
+4. Next steps
+   - Add number tokens and the rule that red numbers 6 and 8 should not be adjacent.
+   - Add real vertex/intersection and edge/path coordinates for placing settlements, cities, and roads.
+   - Add click or tap selection for hexes, paths, and intersections.
+   - Add room state, turn state, and multiplayer sync after the board model is stable.
