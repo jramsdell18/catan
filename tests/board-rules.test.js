@@ -1,3 +1,10 @@
+/**
+ * Board number-token distribution (node:test, not Vitest).
+ *
+ * Run:  npm run test:rules
+ * Or:   node --test tests/board-rules.test.js
+ * See tests/README.md
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRandomBoard, HEX_RADIUS } from '../src/game/board.js';

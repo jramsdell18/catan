@@ -26,12 +26,9 @@ The engine already implements robber/discard, building, development cards, and t
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
-- `npm run test` runs Vitest unit tests for the rules engine (`tests/rules/`) and UI↔rules adapters (`tests/game/`).
-- `npm run test:watch` runs Vitest in watch mode.
-- `npm run test:rules` runs node:test checks for board number-token distribution (`tests/board-rules.test.js`).
-- `npm run test:e2e` runs all Playwright specs (3D render smoke + UI game-flow).
-- `npm run test:render` runs only the 3D canvas smoke specs.
-- `npm run test:all` runs Vitest, board-token checks, then full Playwright e2e.
+- `npm run test:all` runs the full automated suite (unit + board + e2e).
+
+**Testing details** (what each suite covers, how to run a single file or single test for debugging): see **[`tests/README.md`](tests/README.md)**.
 
 ## Project layout
 

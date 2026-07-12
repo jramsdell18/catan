@@ -1,3 +1,10 @@
+/**
+ * Shared helpers for tests/rules/*.test.js
+ *
+ * Run one file:  npx vitest run tests/rules/game.test.js
+ * Run by name:   npx vitest run tests/rules/game.test.js -t "setup phase"
+ * See tests/README.md for the full testing guide.
+ */
 import { createBoard, createGame, applyAction } from '../../src/rules/index.js';
 
 /**

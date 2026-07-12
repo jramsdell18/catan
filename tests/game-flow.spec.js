@@ -1,3 +1,13 @@
+/**
+ * Browser UI flows (lobby → setup → roll / end turn).
+ *
+ * Run all:     npm run test:e2e:flow
+ * One test:    npx playwright test tests/game-flow.spec.js -g "completes setup"
+ * Headed:      npx playwright test tests/game-flow.spec.js --headed
+ * Debug:       npx playwright test tests/game-flow.spec.js --debug
+ *
+ * See tests/README.md for the full testing guide.
+ */
 import { expect, test } from '@playwright/test';
 
 async function waitForTestApi(page) {

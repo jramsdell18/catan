@@ -1,3 +1,10 @@
+/**
+ * 3D canvas smoke: board paints something non-blank on desktop + mobile.
+ *
+ * Run:  npm run test:render
+ * Or:   npx playwright test tests/three-render.spec.js
+ * See tests/README.md
+ */
 import { expect, test } from '@playwright/test';
 import { PNG } from 'pngjs';
 
