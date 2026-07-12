@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
+import GameControlPanel from './components/game/GameControlPanel.jsx';
+import StartGameOverlay from './components/game/StartGameOverlay.jsx';
 import { createRandomBoard } from './game/board.js';
 import { getActivePlayers } from './game/pieces.js';
 import {
   actionForTarget,
   describeAction,
-  describeLogEntry,
-  formatCost,
   findRoadPlanToSettlement,
   getBuildAvailability,
   getInteractionMode,
   getLegalTargets,
-  INTERACTION_LABELS,
   INTERACTION_MODES,
 } from './game/interactions.js';
 import {
@@ -26,7 +25,6 @@ import { applyAction, createGame } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
-const PLAYER_COUNT_OPTIONS = [3, 4];
 
 function rollDie() {
   return 1 + Math.floor(Math.random() * 6);
@@ -86,13 +84,10 @@ function App() {
     () => getLegalTargets(game, topology, board, interactionMode),
     [board, game, interactionMode, topology],
   );
-  const placementOptions = useMemo(
-    () => ({
-      settlements: legalTargets.intersections,
-      roads: legalTargets.edges,
-    }),
-    [legalTargets],
-  );
+  const placementOptions = useMemo(() => ({
+    settlements: legalTargets.intersections,
+    roads: legalTargets.edges,
+  }), [legalTargets]);
 
   const dispatch = useCallback((action) => {
     setActionFeedback({ status: 'pending', message: `Applying: ${describeAction(action.type)}…` });
@@ -121,72 +116,47 @@ function App() {
     setActionFeedback({ status: 'idle', message: 'Action cancelled.' });
   }, []);
 
+  function resetTransientState(message = '') {
+    setGameError('');
+    setDiceRoll(null);
+    setRequestedMode(null);
+    setActionFeedback({ status: 'idle', message });
+  }
+
   function handleConfirm(event) {
     event.preventDefault();
     setConfirmedPlayers(selectedPlayers);
     setGame(null);
-    setGameError('');
-    setDiceRoll(null);
-    setRequestedMode(null);
-    setActionFeedback({ status: 'idle', message: '' });
-  }
-
-  function handleResetCamera() {
-    setCameraResetKey((key) => key + 1);
+    resetTransientState();
   }
 
   function handleStartGame() {
-    if (!confirmedPlayers) {
-      return;
-    }
-
+    if (!confirmedPlayers) return;
     const players = getActivePlayers(confirmedPlayers);
-    const rulesBoard = createRulesBoard(board, topology, ports);
-    setGame(
-      createGame({
-        board: rulesBoard,
-        players: players.map((player) => ({ ...player, name: player.label })),
-      }),
-    );
-    setGameError('');
-    setDiceRoll(null);
-    setRequestedMode(null);
-    setActionFeedback({ status: 'idle', message: 'Game started.' });
+    setGame(createGame({
+      board: createRulesBoard(board, topology, ports),
+      players: players.map((player) => ({ ...player, name: player.label })),
+    }));
+    resetTransientState('Game started.');
   }
 
   function handleRollDice() {
-    if (game?.phase !== 'roll') {
-      return;
-    }
-
+    if (game?.phase !== 'roll') return;
     const dice = [rollDie(), rollDie()];
-    setDiceRoll((current) => ({
-      values: dice,
-      rollId: (current?.rollId ?? 0) + 1,
-    }));
+    setDiceRoll((current) => ({ values: dice, rollId: (current?.rollId ?? 0) + 1 }));
     dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
-  const handleSelectTarget = useCallback(
-    (targetId) => {
-      if (!game || !interactionMode) return;
-      const action = actionForTarget(interactionMode, game, targetId);
-      if (action) dispatch(action);
-    },
-    [dispatch, game, interactionMode],
-  );
-
-  const handlePlaceSettlement = useCallback(
-    (vertexId) => handleSelectTarget(vertexId),
-    [handleSelectTarget],
-  );
+  const handleSelectTarget = useCallback((targetId) => {
+    if (!game || !interactionMode) return;
+    const action = actionForTarget(interactionMode, game, targetId);
+    if (action) dispatch(action);
+  }, [dispatch, game, interactionMode]);
+  const handlePlaceSettlement = useCallback((vertexId) => handleSelectTarget(vertexId), [handleSelectTarget]);
   const handlePlaceRoad = useCallback((edgeId) => handleSelectTarget(edgeId), [handleSelectTarget]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) {
-      return undefined;
-    }
-
+    if (!import.meta.env.DEV) return undefined;
     window.__CATAN_TEST_API = {
       getState: () => ({
         confirmedPlayers,
@@ -231,44 +201,19 @@ function App() {
         });
       },
       rollDice: (dice) => {
-        if (game?.phase !== 'roll') {
-          return;
-        }
+        if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
-        setDiceRoll((current) => ({
-          values,
-          rollId: (current?.rollId ?? 0) + 1,
-        }));
+        setDiceRoll((current) => ({ values, rollId: (current?.rollId ?? 0) + 1 }));
         dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice: values });
       },
     };
-
-    return () => {
-      delete window.__CATAN_TEST_API;
-    };
+    return () => { delete window.__CATAN_TEST_API; };
   }, [
-    actionFeedback,
-    board.seed,
-    buildAvailability,
-    cancelInteraction,
-    confirmedPlayers,
-    dispatch,
-    game,
-    gameError,
-    handlePlaceRoad,
-    handlePlaceSettlement,
-    handleSelectTarget,
-    interactionMode,
-    legalTargets.hexes,
-    placementOptions.roads,
-    placementOptions.settlements,
-    placements.roads.length,
-    placements.settlements.length,
-    placements.cities.length,
-    playerInventories,
+    actionFeedback, board.seed, buildAvailability, cancelInteraction, confirmedPlayers, dispatch,
+    game, gameError, handlePlaceRoad, handlePlaceSettlement, handleSelectTarget, interactionMode,
+    legalTargets.hexes, placementOptions.roads, placementOptions.settlements, placements.cities.length,
+    placements.roads.length, placements.settlements.length, playerInventories, topology,
   ]);
-
-  const actionPhase = game?.phase === 'action';
 
   return (
     <main className="app-shell">
@@ -289,222 +234,37 @@ function App() {
           diceRoll={diceRoll}
         />
         <LiveKitTableCall players={activePlayers} />
-
         {!game && (
-          <div className="start-overlay" aria-labelledby="start-title">
-            <p className="eyebrow">Catan Multiplayer</p>
-            <h1 id="start-title">Start Game</h1>
-            <form className="start-controls" onSubmit={handleConfirm} data-testid="player-setup-form">
-              <label htmlFor="player-count">Players</label>
-              <select
-                id="player-count"
-                data-testid="player-count"
-                value={selectedPlayers}
-                onChange={(event) => setSelectedPlayers(Number(event.target.value))}
-              >
-                {PLAYER_COUNT_OPTIONS.map((count) => (
-                  <option key={count} value={count}>
-                    {count} players
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="secondary-button" data-testid="set-players">
-                Set Players
-              </button>
-              <button
-                type="button"
-                data-testid="start-game"
-                onClick={handleStartGame}
-                disabled={!confirmedPlayers}
-              >
-                Start Game
-              </button>
-            </form>
-            <p className="helper-text" data-testid="player-setup-helper">
-              {confirmedPlayers
-                ? `Players ready: ${confirmedPlayers} (last confirmed: ${confirmedPlayers})`
-                : `Current selection: ${selectedPlayers} players`}
-            </p>
-          </div>
+          <StartGameOverlay
+            selectedPlayers={selectedPlayers}
+            confirmedPlayers={confirmedPlayers}
+            onSelectPlayers={setSelectedPlayers}
+            onConfirm={handleConfirm}
+            onStart={handleStartGame}
+          />
         )}
       </section>
 
-      <section className="game-control-panel" aria-label="Game controls">
-        <div className="turn-summary" data-testid="status-panel">
-          <p className="status-label">{game ? `Phase: ${game.phase}` : 'Room setup'}</p>
-          <p className="status-message" data-testid="status-message">
-            {playerMessage}
-          </p>
-          {game && (
-            <p className="helper-text" data-testid="engine-phase">
-              Engine phase: {game.phase}
-            </p>
-          )}
-          {game?.dice && (
-            <p className="helper-text" data-testid="last-roll">
-              Last roll: {game.dice.join(' + ')} = {diceTotal}
-            </p>
-          )}
-          {game && <p className="helper-text">Cards in play: {totalCards}</p>}
-          {gameError && (
-            <p className="game-error" role="alert" data-testid="game-error">
-              {gameError}
-            </p>
-          )}
-          {interactionMode && (
-            <div className="interaction-status" data-testid="interaction-status">
-              <strong>Board action</strong>
-              <span>{INTERACTION_LABELS[interactionMode]}</span>
-              {requestedMode && (
-                <button
-                  type="button"
-                  className="secondary-button compact-button"
-                  onClick={cancelInteraction}
-                  data-testid="cancel-interaction"
-                >
-                  Cancel action
-                </button>
-              )}
-            </div>
-          )}
-          {actionFeedback.message && (
-            <p
-              className={`action-feedback ${actionFeedback.status}`}
-              aria-live="polite"
-              data-testid="action-feedback"
-              data-status={actionFeedback.status}
-            >
-              {actionFeedback.message}
-            </p>
-          )}
-        </div>
-
-        <div className="control-actions">
-          <button type="button" data-testid="roll-dice" onClick={handleRollDice} disabled={game?.phase !== 'roll'}>
-            Roll Dice
-          </button>
-          <button
-            type="button"
-            data-testid="end-turn"
-            onClick={() => game && dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
-            disabled={game?.phase !== 'action'}
-          >
-            End Turn
-          </button>
-          {actionPhase && (
-            <>
-              <button
-                type="button"
-                className={interactionMode === INTERACTION_MODES.PLACE_ROAD ? 'secondary-button build-button selected' : 'secondary-button build-button'}
-                data-testid="build-road"
-                onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_ROAD)}
-                disabled={!buildAvailability.road.enabled}
-                title={buildAvailability.road.reason || 'Build a road'}
-              >
-                <strong>Build Road</strong>
-                <span>{formatCost(buildAvailability.road.cost)} · {buildAvailability.road.remaining} left</span>
-              </button>
-              <button
-                type="button"
-                className={interactionMode === INTERACTION_MODES.PLACE_SETTLEMENT ? 'secondary-button build-button selected' : 'secondary-button build-button'}
-                data-testid="build-settlement"
-                onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_SETTLEMENT)}
-                disabled={!buildAvailability.settlement.enabled}
-                title={buildAvailability.settlement.reason || 'Build a settlement'}
-              >
-                <strong>Build Settlement</strong>
-                <span>{formatCost(buildAvailability.settlement.cost)} · {buildAvailability.settlement.remaining} left</span>
-              </button>
-              <button
-                type="button"
-                className={interactionMode === INTERACTION_MODES.BUILD_CITY ? 'secondary-button build-button selected' : 'secondary-button build-button'}
-                data-testid="build-city"
-                onClick={() => setRequestedMode(INTERACTION_MODES.BUILD_CITY)}
-                disabled={!buildAvailability.city.enabled}
-                title={buildAvailability.city.reason || 'Build a city'}
-              >
-                <strong>Build City</strong>
-                <span>{formatCost(buildAvailability.city.cost)} · {buildAvailability.city.remaining} left</span>
-              </button>
-            </>
-          )}
-          <button type="button" className="secondary-button" data-testid="reset-camera" onClick={handleResetCamera}>
-            Reset Camera
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            data-testid={game ? 'restart-game' : 'start-game-bottom'}
-            onClick={handleStartGame}
-            disabled={!confirmedPlayers}
-          >
-            {game ? 'Restart Game' : 'Start Game'}
-          </button>
-        </div>
-
-        <div className="table-meta" aria-label="Table status">
-          <div>
-            <p className="status-label">Board seed</p>
-            <p className="seed-value" data-testid="board-seed">
-              {board.seed}
-            </p>
-          </div>
-          {game && (
-            <div>
-              <p className="status-label">Current player</p>
-              <p className="seed-value" data-testid="current-player-label">
-                {currentPlayer?.label}
-              </p>
-            </div>
-          )}
-          {game && (
-            <div>
-              <p className="status-label">Cards in play</p>
-              <p className="seed-value" data-testid="cards-in-play">
-                {totalCards}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {game && (
-          <div className="resource-strip" aria-label="Player resources" data-testid="player-resources">
-            {game.players.map((player) => (
-              <div
-                className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'}
-                key={player.id}
-                data-testid={`player-state-${player.id}`}
-                data-active={player.id === game.currentPlayerId ? 'true' : 'false'}
-              >
-                <strong>{player.name}</strong>
-                <span data-testid={`player-resources-${player.id}`}>
-                  {Object.entries(player.resources)
-                    .map(([resource, count]) => `${resource}: ${count}`)
-                    .join(' | ')}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {game?.log.length > 0 && (
-          <section className="history-panel" aria-labelledby="history-title" data-testid="action-history">
-            <p className="status-label" id="history-title">
-              Recent actions
-            </p>
-            <ol>
-              {[...game.log]
-                .reverse()
-                .slice(0, 8)
-                .map((entry, index) => (
-                  <li key={`${game.log.length - index}-${entry.type}`}>
-                    {describeLogEntry(entry, game.players)}
-                  </li>
-                ))}
-            </ol>
-          </section>
-        )}
-      </section>
+      <GameControlPanel
+        game={game}
+        playerMessage={playerMessage}
+        diceTotal={diceTotal}
+        totalCards={totalCards}
+        gameError={gameError}
+        interactionMode={interactionMode}
+        requestedMode={requestedMode}
+        onCancelInteraction={cancelInteraction}
+        actionFeedback={actionFeedback}
+        confirmedPlayers={confirmedPlayers}
+        buildAvailability={buildAvailability}
+        onRollDice={handleRollDice}
+        onEndTurn={() => game && dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
+        onSelectMode={setRequestedMode}
+        onResetCamera={() => setCameraResetKey((key) => key + 1)}
+        onStartGame={handleStartGame}
+        boardSeed={board.seed}
+        currentPlayer={currentPlayer}
+      />
     </main>
   );
 }
