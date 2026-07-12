@@ -268,7 +268,7 @@ function CatanScene({
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     container.appendChild(renderer.domElement);
 
@@ -386,10 +386,9 @@ function CatanScene({
 
     let animationId = 0;
     let renderedFrames = 0;
-    const clock = new THREE.Clock();
 
     function animate() {
-      const elapsed = clock.getElapsedTime();
+      const elapsed = performance.now() / 1000;
       const pulse = 1 + Math.sin(elapsed * 4) * 0.08;
       animatedHighlights.forEach((highlight) => {
         highlight.scale.setScalar(pulse);
