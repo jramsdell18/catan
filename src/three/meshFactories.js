@@ -117,48 +117,37 @@ export function createCityMesh(color) {
   return group;
 }
 
-export function createCardZoneMesh() {
-  const group = new THREE.Group();
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(1.85, 0.04, 0.92),
-    new THREE.MeshStandardMaterial({ color: '#1f6671', roughness: 0.78 }),
-  );
-  base.position.y = 0.02;
-  base.receiveShadow = true;
-  group.add(base);
-
-  return group;
-}
-
 export function createResourceCardMesh() {
-  const group = new THREE.Group();
-  const cardThickness = 0.006;
-  const cardCenterY = cardThickness / 2;
-  const border = new THREE.Mesh(
-    new THREE.BoxGeometry(0.39, cardThickness, 0.57),
-    new THREE.MeshStandardMaterial({ color: '#edf3ff', roughness: 0.5 }),
-  );
-  border.position.y = cardCenterY;
-  border.castShadow = true;
-  group.add(border);
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 192;
 
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#edf3ff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#173f86';
+  context.fillRect(8, 8, canvas.width - 16, canvas.height - 16);
+  context.strokeStyle = '#edf3ff';
+  context.lineWidth = 5;
+  context.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+  context.fillStyle = '#2c63ba';
+  context.fillRect(34, 48, canvas.width - 68, canvas.height - 96);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const cardThickness = 0.006;
+  const sideMaterial = new THREE.MeshStandardMaterial({ color: '#173f86', roughness: 0.8 });
+  const topMaterial = new THREE.MeshBasicMaterial({ map: texture });
   const card = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35, cardThickness, 0.53),
-    new THREE.MeshStandardMaterial({ color: '#173f86', roughness: 0.62 }),
+    new THREE.BoxGeometry(0.39, cardThickness, 0.57),
+    [sideMaterial, sideMaterial, topMaterial, sideMaterial, sideMaterial, sideMaterial],
   );
-  card.position.y = cardCenterY;
+  card.position.y = cardThickness / 2;
   card.castShadow = true;
   card.receiveShadow = true;
-  group.add(card);
 
-  const inset = new THREE.Mesh(
-    new THREE.BoxGeometry(0.25, cardThickness, 0.4),
-    new THREE.MeshStandardMaterial({ color: '#2c63ba', roughness: 0.68 }),
-  );
-  inset.position.y = cardCenterY;
-  group.add(inset);
-
-  return group;
+  return card;
 }
 
 export function createRobberMesh() {

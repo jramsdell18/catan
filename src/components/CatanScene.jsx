@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
-  createCardZoneMesh,
   createCityMesh,
   createHexTileMesh,
   createResourceCardMesh,
@@ -126,9 +125,6 @@ function createCardStack(cards) {
   const group = new THREE.Group();
   group.name = 'face-down-resource-cards';
 
-  const zone = createCardZoneMesh();
-  group.add(zone);
-
   const cardCount = cards.length;
   const spacing =
     cardCount <= 1 ? 0 : Math.min(CARD_MAX_SPACING, (CARD_AREA_WIDTH - CARD_WIDTH) / (cardCount - 1));
@@ -137,7 +133,7 @@ function createCardStack(cards) {
   cards.forEach((card, index) => {
     const cardMesh = createResourceCardMesh();
     cardMesh.name = card.id;
-    cardMesh.position.set(startX + index * spacing, 0.04 + index * 0.003, 0);
+    cardMesh.position.set(startX + index * spacing, index * 0.003, 0);
     group.add(cardMesh);
   });
 
