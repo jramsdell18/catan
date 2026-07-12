@@ -10,6 +10,8 @@ const BOARD_ROWS = [
 
 export const HEX_RADIUS = 1;
 
+const NUMBER_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+
 export const BOARD_SLOTS = BOARD_ROWS.flatMap((rowConfig, rowIndex) =>
   Array.from({ length: rowConfig.count }, (_, colIndex) => {
     const q = rowConfig.qStart + colIndex;
@@ -52,15 +54,19 @@ function shuffle(items, random) {
 export function createRandomBoard(seed = Date.now()) {
   const random = mulberry32(seed);
   const terrainDeck = shuffle(createTerrainDeck(), random);
+  const numberTokens = shuffle(NUMBER_TOKENS, random);
+  let numberIndex = 0;
   const hexes = BOARD_SLOTS.map((slot, index) => {
     const terrain = terrainDeck[index];
+    const isDesert = terrain.terrainId === 'desert';
 
     return {
       ...slot,
       hexId: `hex-${index + 1}`,
       terrainId: terrain.terrainId,
       terrainPieceId: terrain.id,
-      hasRobber: terrain.terrainId === 'desert',
+      number: isDesert ? null : numberTokens[numberIndex++],
+      hasRobber: isDesert,
     };
   });
 

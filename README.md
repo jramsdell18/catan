@@ -11,6 +11,16 @@ npm run dev
 
 Open the local URL printed by Vite. The current screen lets you pick a player count, inspect a 3D board, and randomize the terrain layout.
 
+## Test the rules integration
+
+1. Run `npm install`, then `npm run dev`.
+2. Choose 3 or 4 players, select **Set Players**, and select **Start Game**.
+3. Follow the highlighted intersections and edges to place each settlement and road. The rules engine enforces the distance rule, road adjacency, and the two-round snake order.
+4. After setup, confirm the phase changes to `roll` and that resources from every second settlement appear in the player summaries.
+5. Select **Roll Dice**. A normal production roll changes the phase to `action`; inspect the resource totals, then select **End Turn** and confirm the current player changes.
+
+The engine already implements robber/discard, building, development cards, and trade commands, but the corresponding UI controls are still to be added. A roll of 7 will therefore display the required phase but cannot yet be completed from the UI.
+
 ## Scripts
 
 - `npm run dev` starts the Vite dev server.
