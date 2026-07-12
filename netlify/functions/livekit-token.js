@@ -1,4 +1,4 @@
-import { AccessToken } from 'livekit-server-sdk';
+import { SignJWT } from 'jose';
 
 const ROOM_MAX_LENGTH = 80;
 const IDENTITY_MAX_LENGTH = 64;
@@ -51,25 +51,26 @@ export async function handler(event) {
     });
   }
 
-  const token = new AccessToken(apiKey, apiSecret, {
-    identity: participantIdentity,
-    name: participantName,
-    metadata: JSON.stringify({ playerId }),
-    ttl: '2h',
-  });
+  try {
+    const participantToken = await createLiveKitToken({
+      apiKey,
+      apiSecret,
+      participantIdentity,
+      participantName,
+      playerId,
+      roomName,
+    });
 
-  token.addGrant({
-    room: roomName,
-    roomJoin: true,
-    canPublish: true,
-    canPublishData: true,
-    canSubscribe: true,
-  });
-
-  return jsonResponse(200, {
-    serverUrl: livekitUrl,
-    participantToken: await token.toJwt(),
-  });
+    return jsonResponse(200, {
+      serverUrl: livekitUrl,
+      participantToken,
+    });
+  } catch (error) {
+    return jsonResponse(500, {
+      error: 'Could not create LiveKit token.',
+      detail: error.message,
+    });
+  }
 }
 
 function jsonResponse(statusCode, body) {
@@ -99,4 +100,34 @@ function normalizeName(value) {
   return String(value || '')
     .trim()
     .slice(0, NAME_MAX_LENGTH);
+}
+
+async function createLiveKitToken({
+  apiKey,
+  apiSecret,
+  participantIdentity,
+  participantName,
+  playerId,
+  roomName,
+}) {
+  const secret = new TextEncoder().encode(apiSecret);
+  const metadata = JSON.stringify({ playerId });
+
+  return new SignJWT({
+    name: participantName,
+    metadata,
+    video: {
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canPublishData: true,
+      canSubscribe: true,
+    },
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(apiKey)
+    .setSubject(participantIdentity)
+    .setNotBefore('0s')
+    .setExpirationTime('2h')
+    .sign(secret);
 }
