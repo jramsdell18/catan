@@ -140,7 +140,7 @@ export function createResourceCardMesh() {
   const sideMaterial = new THREE.MeshStandardMaterial({ color: '#173f86', roughness: 0.8 });
   const topMaterial = new THREE.MeshBasicMaterial({ map: texture });
   const card = new THREE.Mesh(
-    new THREE.BoxGeometry(0.39, cardThickness, 0.57),
+    new THREE.BoxGeometry(0.78, cardThickness, 1.14),
     [sideMaterial, sideMaterial, topMaterial, sideMaterial, sideMaterial, sideMaterial],
   );
   card.position.y = cardThickness / 2;
