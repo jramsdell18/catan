@@ -108,17 +108,17 @@ function addPlacementHighlights(world, placementOptions, interactionTargets) {
 }
 
 const PLAYER_RACK_SPOTS = [
-  { x: 0, z: 7.9, rotation: 0 },
-  { x: 0, z: -7.9, rotation: Math.PI },
-  { x: -8.6, z: 0, rotation: -Math.PI / 2 },
-  { x: 8.6, z: 0, rotation: Math.PI / 2 },
-  { x: -7.15, z: -6.9, rotation: -Math.PI * 0.75 },
-  { x: 7.15, z: 6.9, rotation: Math.PI * 0.25 },
+  { x: 0, z: 7.25, rotation: 0 },
+  { x: 0, z: -7.25, rotation: Math.PI },
+  { x: -7.8, z: 0, rotation: -Math.PI / 2 },
+  { x: 7.8, z: 0, rotation: Math.PI / 2 },
+  { x: -6.45, z: -6.25, rotation: -Math.PI * 0.75 },
+  { x: 6.45, z: 6.25, rotation: Math.PI * 0.25 },
 ];
 
-const CARD_AREA_WIDTH = 1.55;
-const CARD_WIDTH = 0.36;
-const CARD_MAX_SPACING = 0.18;
+const CARD_AREA_WIDTH = 3.1;
+const CARD_WIDTH = 0.78;
+const CARD_MAX_SPACING = 0.36;
 const PLAYER_TABLE_SURFACE_Y = -0.22;
 
 function createCardStack(cards) {
@@ -148,7 +148,10 @@ function createRoadInventory(player, count) {
     const road = createRoadMesh(player.color);
     const col = index % 5;
     const row = Math.floor(index / 5);
-    road.position.set(-1.35 + col * 0.28, 0, -0.42 + row * 0.22);
+    const isRightSideRow = row === 2;
+    const x = isRightSideRow ? 0.12 + col * 0.28 : -1.35 + col * 0.28;
+    const z = isRightSideRow ? -0.95 : -1.2 + row * 0.68;
+    road.position.set(x, 0, z);
     road.rotation.y = -Math.PI / 2;
     group.add(road);
 
@@ -164,7 +167,7 @@ function createSettlementInventory(player, count) {
 
   Array.from({ length: count }, (_, index) => {
     const settlement = createSettlementMesh(player.color);
-    settlement.position.set(-1.32 + index * 0.33, 0, 0.34);
+    settlement.position.set(-1.38 + index * 0.42, 0, 0.34);
     group.add(settlement);
 
     return settlement;
@@ -179,7 +182,7 @@ function createCityInventory(player, count) {
 
   Array.from({ length: count }, (_, index) => {
     const city = createCityMesh(player.color);
-    city.position.set(0.45 + index * 0.42, 0, 0.23);
+    city.position.set(0.38 + index * 0.56, 0, 0.23);
     group.add(city);
 
     return city;
@@ -193,7 +196,7 @@ function createPlayerArea(player, cards, inventory) {
   playerGroup.name = `player-${player.seat}-${player.id}-area`;
 
   const cardStack = createCardStack(cards);
-  cardStack.position.set(1.45, 0, -0.34);
+  cardStack.position.set(2.1, 0, -0.72);
 
   playerGroup.add(
     createRoadInventory(player, inventory.road),
@@ -271,8 +274,8 @@ function CatanScene({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 6;
-    controls.maxDistance = 18;
+    controls.minDistance = 8;
+    controls.maxDistance = 24;
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.target.set(0, 0.2, 0.3);
 
@@ -301,11 +304,11 @@ function CatanScene({
     world.add(playerTable);
 
     const boardTable = new THREE.Mesh(
-      new THREE.CylinderGeometry(5.8, 5.8, 0.08, 6),
+      new THREE.CylinderGeometry(5.8, 5.8, 0.2, 6),
       new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 }),
     );
     boardTable.rotation.y = Math.PI / 6;
-    boardTable.position.y = -0.16;
+    boardTable.position.y = -0.02;
     boardTable.receiveShadow = true;
     world.add(boardTable);
 
@@ -331,7 +334,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 14.2 : 12.6, isNarrow ? 14.6 : 13.2);
+      camera.position.set(0, isNarrow ? 17.5 : 15.4, isNarrow ? 17.8 : 16.2);
       camera.lookAt(controls.target);
       controls.update();
     }
