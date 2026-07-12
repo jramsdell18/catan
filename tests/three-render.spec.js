@@ -1,0 +1,40 @@
+import { expect, test } from '@playwright/test';
+import { PNG } from 'pngjs';
+
+const viewports = [
+  { name: 'desktop', size: { width: 1280, height: 900 } },
+  { name: 'mobile', size: { width: 390, height: 844 } },
+];
+
+for (const viewport of viewports) {
+  test(`3D board renders a nonblank ${viewport.name} canvas`, async ({ page }) => {
+    await page.setViewportSize(viewport.size);
+    await page.goto('/');
+
+    const scene = page.locator('.catan-scene');
+    const canvas = scene.locator('canvas');
+
+    await expect(scene).toBeVisible();
+    await expect(canvas).toBeVisible();
+    await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
+
+    const screenshot = await scene.screenshot({ path: `test-results/catan-3d-${viewport.name}.png` });
+    const image = PNG.sync.read(screenshot);
+    const colors = new Set();
+
+    for (let index = 0; index < image.data.length; index += 16) {
+      const red = image.data[index];
+      const green = image.data[index + 1];
+      const blue = image.data[index + 2];
+      const alpha = image.data[index + 3];
+
+      if (alpha > 0) {
+        colors.add(`${red >> 4}-${green >> 4}-${blue >> 4}`);
+      }
+    }
+
+    expect(image.width).toBeGreaterThan(250);
+    expect(image.height).toBeGreaterThan(250);
+    expect(colors.size).toBeGreaterThan(8);
+  });
+}
