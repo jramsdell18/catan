@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import woodTextureUrl from '../assets/wood.jpg';
 import {
   createCityMesh,
   createHexTileMesh,
@@ -295,9 +296,18 @@ function CatanScene({
     const interactionTargets = [];
     const animatedHighlights = [];
 
+    const woodTexture = new THREE.TextureLoader().load(woodTextureUrl);
+    woodTexture.colorSpace = THREE.SRGBColorSpace;
+    woodTexture.wrapS = THREE.RepeatWrapping;
+    woodTexture.wrapT = THREE.RepeatWrapping;
+    woodTexture.center.set(0.5, 0.5);
+    woodTexture.rotation = Math.PI / 2;
+    woodTexture.repeat.set(1.65, 1.5);
+    woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
     const playerTable = new THREE.Mesh(
-      new THREE.BoxGeometry(19, 0.12, 17),
-      new THREE.MeshStandardMaterial({ color: '#7a4b2a', roughness: 0.86 }),
+      new THREE.BoxGeometry(57, 0.12, 51),
+      new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.82 }),
     );
     playerTable.position.y = -0.28;
     playerTable.receiveShadow = true;
@@ -334,7 +344,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 17.5 : 15.4, isNarrow ? 17.8 : 16.2);
+      camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
       camera.lookAt(controls.target);
       controls.update();
     }
