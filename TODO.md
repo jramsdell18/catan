@@ -86,18 +86,18 @@ After rolling, a player can legally build every piece type, see the correct reso
 
 ## Milestone 4: Complete dice production and robber workflows
 
-- [ ] Show a clear dice result and highlight producing hexes.
-- [ ] Show which resources each player received.
-- [ ] Explain production skipped because of bank shortages.
-- [ ] When a 7 is rolled, calculate and display every required discard count.
-- [ ] Add resource-selection forms for discarding exactly half the required hand.
-- [ ] Prevent robber movement until all required discards are complete.
-- [ ] Highlight legal robber destination hexes.
-- [ ] Show eligible victims adjacent to the selected hex.
-- [ ] Allow the active player to choose a victim or confirm that no victim is available.
-- [ ] Move the rendered robber to its new hex.
-- [ ] Display the stolen result without exposing hidden information to other players.
-- [ ] Add UI integration tests for production, bank shortages, discards, robber movement, and theft.
+- [x] Show a clear dice result and highlight producing hexes.
+- [x] Show which resources each player received.
+- [x] Explain production skipped because of bank shortages.
+- [x] When a 7 is rolled, calculate and display every required discard count.
+- [x] Add resource-selection forms for discarding exactly half the required hand.
+- [x] Prevent robber movement until all required discards are complete.
+- [x] Highlight legal robber destination hexes.
+- [x] Show eligible victims adjacent to the selected hex.
+- [x] Allow the active player to choose a victim or confirm that no victim is available.
+- [x] Move the rendered robber to its new hex.
+- [x] Display the stolen result without exposing hidden information to other players.
+- [x] Add UI integration tests for production, bank shortages, discards, robber movement, and theft.
 
 ### Done when
 

@@ -20,6 +20,7 @@ export function getInteractionMode(game, requestedMode = null) {
   if (game.phase === 'setup') {
     return game.setupSettlementId ? INTERACTION_MODES.PLACE_ROAD : INTERACTION_MODES.PLACE_SETTLEMENT;
   }
+  if (game.phase === 'robber') return INTERACTION_MODES.MOVE_ROBBER;
   return requestedMode;
 }
 
@@ -75,6 +76,18 @@ export function actionForTarget(mode, game, targetId) {
   }
   if (mode === INTERACTION_MODES.MOVE_ROBBER) return { ...base, tileId: targetId };
   return null;
+}
+
+export function getEligibleRobberVictims(game, tileId) {
+  if (!game?.board.tiles[tileId]) return [];
+  const ids = new Set(
+    game.board.tiles[tileId].intersections
+      .map((id) => game.board.intersections[id].building?.playerId)
+      .filter((id) => id && id !== game.currentPlayerId),
+  );
+  return game.players.filter((player) =>
+    ids.has(player.id) && Object.values(player.resources).reduce((sum, amount) => sum + amount, 0) > 0,
+  );
 }
 
 const ACTION_LABELS = Object.freeze({

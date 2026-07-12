@@ -147,6 +147,11 @@ describe('dice, production, robber, discard', () => {
     game = applyAction(game, { type: 'rollDice', playerId: 'p1', dice: [1, 3] }); // total 4
     expect(game.phase).toBe('action');
     expect(game.dice).toEqual([1, 3]);
+    expect(game.lastProduction.total).toBe(4);
+    expect(game.lastProduction.tiles).toContainEqual(expect.objectContaining({
+      tileId: 't-fields-4', resource: 'hay', distributed: true, blocked: false,
+    }));
+    expect(game.lastProduction.gains.p1.hay).toBe(1);
     expect(player(game, 'p1').resources.hay).toBe(
       player(completeSetup(newGame()), 'p1').resources.hay + 1,
     );
@@ -177,6 +182,7 @@ describe('dice, production, robber, discard', () => {
       { random: () => 0 },
     );
     expect(game.board.robberTileId).toBe('t-forest-6');
+    expect(game.lastRobbery).toMatchObject({ tileId: 't-forest-6', victimId: 'p2' });
 
     const woodAfterRob = {
       p1: player(game, 'p1').resources.wood,
@@ -246,6 +252,18 @@ describe('dice, production, robber, discard', () => {
       (r) => player(game, 'p1').resources[r] === beforeP1[r] + 1,
     );
     expect(stolen).toBeTruthy();
+    expect(game.lastRobbery.stolenResource).toBe(stolen);
+  });
+
+  it('reports production skipped by a bank shortage', () => {
+    let game = completeSetup(newGame());
+    game = structuredClone(game);
+    game.bank.hay = 0;
+    game = applyAction(game, { type: 'rollDice', playerId: 'p1', dice: [1, 3] });
+    expect(game.lastProduction.tiles).toContainEqual(expect.objectContaining({
+      tileId: 't-fields-4', resource: 'hay', distributed: false, shortage: true,
+    }));
+    expect(game.lastProduction.gains.p1?.hay).toBeUndefined();
   });
 
 

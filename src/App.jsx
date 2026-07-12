@@ -9,6 +9,7 @@ import {
   describeAction,
   findRoadPlanToSettlement,
   getBuildAvailability,
+  getEligibleRobberVictims,
   getInteractionMode,
   getLegalTargets,
   INTERACTION_MODES,
@@ -21,7 +22,7 @@ import {
   resourceHandsFromGame,
 } from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
-import { applyAction, createGame } from './rules/index.js';
+import { applyAction, createGame, TERRAIN_RESOURCE } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
@@ -40,6 +41,7 @@ function App() {
   const [diceRoll, setDiceRoll] = useState(null);
   const [requestedMode, setRequestedMode] = useState(null);
   const [actionFeedback, setActionFeedback] = useState({ status: 'idle', message: '' });
+  const [selectedRobberTileId, setSelectedRobberTileId] = useState(null);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -55,6 +57,10 @@ function App() {
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
   const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
   const interactionMode = getInteractionMode(game, requestedMode);
+  const eligibleRobberVictims = useMemo(
+    () => selectedRobberTileId ? getEligibleRobberVictims(game, selectedRobberTileId) : [],
+    [game, selectedRobberTileId],
+  );
   const buildTargets = useMemo(() => ({
     road: getLegalTargets(game, topology, board, INTERACTION_MODES.PLACE_ROAD).edges,
     settlement: getLegalTargets(game, topology, board, INTERACTION_MODES.PLACE_SETTLEMENT).intersections,
@@ -65,6 +71,10 @@ function App() {
     settlement: buildTargets.settlement.length,
     city: buildTargets.city.length,
   }), [buildTargets, game]);
+  const productionCandidates = useMemo(() => game ? Object.values(game.board.tiles)
+    .filter((tile) => tile.number && tile.id !== game.board.robberTileId)
+    .filter((tile) => tile.intersections.some((id) => game.board.intersections[id].building))
+    .map((tile) => ({ tileId: tile.id, total: tile.number, resource: TERRAIN_RESOURCE[tile.terrain] })) : [], [game]);
 
   const playerMessage = useMemo(() => {
     if (!confirmedPlayers) return 'Choose a player count to start the room setup.';
@@ -101,6 +111,7 @@ function App() {
         setGameError('');
         setActionFeedback({ status: 'success', message: `Success: ${describeAction(action.type)}.` });
         setRequestedMode(null);
+        if (action.type === 'moveRobber') setSelectedRobberTileId(null);
         return next;
       } catch (error) {
         setGameError(error.message);
@@ -112,6 +123,7 @@ function App() {
 
   const cancelInteraction = useCallback(() => {
     setRequestedMode(null);
+    setSelectedRobberTileId(null);
     setGameError('');
     setActionFeedback({ status: 'idle', message: 'Action cancelled.' });
   }, []);
@@ -120,6 +132,7 @@ function App() {
     setGameError('');
     setDiceRoll(null);
     setRequestedMode(null);
+    setSelectedRobberTileId(null);
     setActionFeedback({ status: 'idle', message });
   }
 
@@ -149,6 +162,14 @@ function App() {
 
   const handleSelectTarget = useCallback((targetId) => {
     if (!game || !interactionMode) return;
+    if (interactionMode === INTERACTION_MODES.MOVE_ROBBER) {
+      const victims = getEligibleRobberVictims(game, targetId);
+      if (victims.length > 0) {
+        setSelectedRobberTileId(targetId);
+        setActionFeedback({ status: 'idle', message: 'Choose an adjacent player to rob.' });
+        return;
+      }
+    }
     const action = actionForTarget(interactionMode, game, targetId);
     if (action) dispatch(action);
   }, [dispatch, game, interactionMode]);
@@ -167,6 +188,16 @@ function App() {
         settlementOptions: placementOptions.settlements.map((vertex) => vertex.id),
         roadOptions: placementOptions.roads.map((edge) => edge.id),
         hexOptions: legalTargets.hexes.map((hex) => hex.hexId),
+        selectedRobberTileId,
+        eligibleRobberVictims: eligibleRobberVictims.map((player) => player.id),
+        robberOptions: legalTargets.hexes.map((hex) => ({
+          tileId: hex.hexId,
+          victimIds: getEligibleRobberVictims(game, hex.hexId).map((player) => player.id),
+        })),
+        robberTileId: game?.board.robberTileId ?? null,
+        productionCandidates,
+        lastProduction: game?.lastProduction ?? null,
+        lastRobbery: game?.lastRobbery ?? null,
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
         cityCount: placements.cities.length,
@@ -200,6 +231,14 @@ function App() {
           return next;
         });
       },
+      setBank: (resource, amount) => {
+        setGame((current) => {
+          if (!current) return current;
+          const next = structuredClone(current);
+          next.bank[resource] = amount;
+          return next;
+        });
+      },
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -210,9 +249,11 @@ function App() {
     return () => { delete window.__CATAN_TEST_API; };
   }, [
     actionFeedback, board.seed, buildAvailability, cancelInteraction, confirmedPlayers, dispatch,
+    eligibleRobberVictims,
     game, gameError, handlePlaceRoad, handlePlaceSettlement, handleSelectTarget, interactionMode,
     legalTargets.hexes, placementOptions.roads, placementOptions.settlements, placements.cities.length,
-    placements.roads.length, placements.settlements.length, playerInventories, topology,
+    placements.roads.length, placements.settlements.length, playerInventories, productionCandidates,
+    selectedRobberTileId, topology,
   ]);
 
   return (
@@ -232,6 +273,7 @@ function App() {
           interactionMode={interactionMode}
           onSelectTarget={handleSelectTarget}
           diceRoll={diceRoll}
+          productionTileIds={game?.lastProduction?.tiles.filter((tile) => tile.distributed && tile.demand > 0).map((tile) => tile.tileId) ?? []}
         />
         <LiveKitTableCall players={activePlayers} />
         {!game && (
@@ -264,6 +306,16 @@ function App() {
         onStartGame={handleStartGame}
         boardSeed={board.seed}
         currentPlayer={currentPlayer}
+        selectedRobberTileId={selectedRobberTileId}
+        eligibleRobberVictims={eligibleRobberVictims}
+        onDiscard={(playerId, resources) => dispatch({ type: 'discard', playerId, resources })}
+        onSelectVictim={(victimId) => dispatch({
+          type: 'moveRobber',
+          playerId: game.currentPlayerId,
+          tileId: selectedRobberTileId,
+          victimId,
+        })}
+        onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
       />
     </main>
   );

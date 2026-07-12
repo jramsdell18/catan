@@ -1,6 +1,8 @@
 import ActionHistory from './ActionHistory.jsx';
 import BuildControls from './BuildControls.jsx';
 import ResourceStrip from './ResourceStrip.jsx';
+import RobberWorkflow from './RobberWorkflow.jsx';
+import RollOutcome from './RollOutcome.jsx';
 import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 
@@ -10,6 +12,15 @@ function GameControlPanel(props) {
   return (
     <section className="game-control-panel" aria-label="Game controls">
       <TurnSummary {...props} />
+      <RobberWorkflow
+        game={game}
+        selectedTileId={props.selectedRobberTileId}
+        eligibleVictims={props.eligibleRobberVictims}
+        onDiscard={props.onDiscard}
+        onSelectVictim={props.onSelectVictim}
+        onChooseDifferentHex={props.onChooseDifferentRobberHex}
+      />
+      <RollOutcome game={game} />
       <div className="control-actions">
         <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll'}>Roll Dice</button>
         <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase}>End Turn</button>

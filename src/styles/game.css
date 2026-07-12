@@ -117,6 +117,28 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 
 .history-panel ol { display: grid; gap: 0.4rem; margin: 0; padding-left: 1.25rem; color: #43534c; font-size: 0.88rem; }
 
+.required-action-panel,
+.roll-outcome {
+  min-width: 0;
+  border: 1px solid rgba(138, 77, 42, 0.3);
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fffaf0;
+}
+
+.required-action-panel p,
+.roll-outcome p { margin: 0.35rem 0; }
+
+.discard-form { display: grid; gap: 0.65rem; margin-top: 0.8rem; }
+.discard-resources { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.45rem; }
+.discard-resource { display: grid; gap: 0.3rem; border-radius: 6px; padding: 0.45rem; background: #ffffff; }
+.discard-resource > span { font-size: 0.78rem; font-weight: 700; text-transform: capitalize; }
+.discard-resource > div { display: grid; grid-template-columns: 2rem 1fr 2rem; align-items: center; gap: 0.3rem; }
+.discard-resource button { min-height: 32px; padding: 0.25rem; }
+.discard-resource output { text-align: center; font-weight: 800; }
+.victim-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+.production-warning { color: #8c4d16; font-weight: 700; }
+
 @media (min-width: 620px) {
   .start-overlay { padding: 1.75rem; }
   .start-controls { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
@@ -132,6 +154,8 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
     padding-top: 1rem;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
+  .required-action-panel,
+  .roll-outcome { grid-column: 1 / -1; }
   .control-actions { grid-column: 2; }
   .table-meta { grid-column: 3; grid-template-columns: 1fr; }
   .resource-strip { grid-column: 1 / -1; }

@@ -56,6 +56,8 @@ export function createGame({ players, board, random = Math.random }) {
     hasRolled: false,
     playedDevelopmentThisTurn: false,
     pendingDiscards: {},
+    lastProduction: null,
+    lastRobbery: null,
     tradeOffer: null,
     longestRoadPlayerId: null,
     largestArmyPlayerId: null,
@@ -154,20 +156,30 @@ function placeRoad(state, action, free = false) {
 }
 
 function distributeProduction(state, total) {
+  const outcome = { total, tiles: [], gains: {} };
   for (const tile of Object.values(state.board.tiles)) {
-    if (tile.number !== total || tile.id === state.board.robberTileId) continue;
+    if (tile.number !== total) continue;
     const resource = TERRAIN_RESOURCE[tile.terrain];
+    if (tile.id === state.board.robberTileId) {
+      outcome.tiles.push({ tileId: tile.id, resource, demand: 0, distributed: false, blocked: true, shortage: false });
+      continue;
+    }
     const claims = tile.intersections
       .map((id) => state.board.intersections[id].building)
       .filter(Boolean)
       .map((building) => ({ player: playerById(state, building.playerId), amount: building.type === 'city' ? 2 : 1 }));
     const demand = claims.reduce((sum, claim) => sum + claim.amount, 0);
-    if (state.bank[resource] < demand) continue;
+    const shortage = state.bank[resource] < demand;
+    outcome.tiles.push({ tileId: tile.id, resource, demand, distributed: !shortage, blocked: false, shortage });
+    if (shortage) continue;
     for (const claim of claims) {
       state.bank[resource] -= claim.amount;
       claim.player.resources[resource] += claim.amount;
+      outcome.gains[claim.player.id] ??= {};
+      outcome.gains[claim.player.id][resource] = (outcome.gains[claim.player.id][resource] ?? 0) + claim.amount;
     }
   }
+  return outcome;
 }
 
 function rollDice(state, action, random) {
@@ -179,13 +191,15 @@ function rollDice(state, action, random) {
   }
   state.dice = dice;
   state.hasRolled = true;
+  state.lastRobbery = null;
   if (dice[0] + dice[1] === 7) {
+    state.lastProduction = null;
     state.pendingDiscards = Object.fromEntries(
       state.players.filter((p) => totalResources(p.resources) > 7).map((p) => [p.id, Math.floor(totalResources(p.resources) / 2)]),
     );
     state.phase = Object.keys(state.pendingDiscards).length ? 'discard' : 'robber';
   } else {
-    distributeProduction(state, dice[0] + dice[1]);
+    state.lastProduction = distributeProduction(state, dice[0] + dice[1]);
     state.phase = 'action';
   }
 }
@@ -216,13 +230,15 @@ function moveRobber(state, action, random) {
   if (action.victimId && !eligible.has(action.victimId)) throw new Error('Selected player cannot be robbed.');
   if (!action.victimId && eligible.size) throw new Error('Choose an eligible player to rob.');
   state.board.robberTileId = action.tileId;
+  let stolen = null;
   if (action.victimId) {
     const victim = playerById(state, action.victimId);
     const cards = RESOURCE_TYPES.flatMap((resource) => Array(victim.resources[resource]).fill(resource));
-    const stolen = cards[Math.floor(random() * cards.length)];
+    stolen = cards[Math.floor(random() * cards.length)];
     victim.resources[stolen] -= 1;
     currentPlayer(state).resources[stolen] += 1;
   }
+  state.lastRobbery = { tileId: action.tileId, victimId: action.victimId ?? null, stolenResource: stolen };
   state.phase = 'action';
 }
 

@@ -151,6 +151,19 @@ function addBoardHighlights(world, legalTargets, interactionMode, interactionTar
   world.add(highlights);
 }
 
+function addProductionHighlights(world, board, productionTileIds) {
+  const group = new THREE.Group();
+  group.name = 'production-highlights';
+  productionTileIds.forEach((tileId) => {
+    const hex = board.hexes.find((item) => item.hexId === tileId);
+    if (!hex) return;
+    const highlight = createHexHighlightMesh('#68d391');
+    highlight.position.set(hex.world.x, 0.24, hex.world.z);
+    group.add(highlight);
+  });
+  world.add(group);
+}
+
 const PLAYER_RACK_SPOTS = [
   { x: 0, z: 7.25, rotation: 0 },
   { x: 0, z: -7.25, rotation: Math.PI },
@@ -348,6 +361,7 @@ function CatanScene({
   interactionMode,
   onSelectTarget,
   diceRoll,
+  productionTileIds,
 }) {
   const containerRef = useRef(null);
   const cameraStateRef = useRef(null);
@@ -487,6 +501,7 @@ function CatanScene({
     addPorts(world, ports, topology);
     addPlacedPieces(world, activePlayers, topology, placements);
     addBoardHighlights(world, legalTargets, interactionMode, interactionTargets);
+    addProductionHighlights(world, board, productionTileIds);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     addDiceArea(world, diceRoll, animatedDice);
@@ -500,6 +515,7 @@ function CatanScene({
       placedRoads: placements.roads.length,
       placedSettlements: placements.settlements.length,
       placedCities: placements.cities.length,
+      productionHighlights: productionTileIds.length,
       dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
     };
@@ -637,6 +653,7 @@ function CatanScene({
     placements,
     playerInventories,
     ports,
+    productionTileIds,
     resourceHands,
     robberTileId,
     topology,

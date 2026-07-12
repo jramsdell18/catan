@@ -18,6 +18,11 @@ async function getTestState(page) {
   return page.evaluate(() => window.__CATAN_TEST_API.getState());
 }
 
+function diceForTotal(total) {
+  const first = Math.max(1, total - 6);
+  return [first, total - first];
+}
+
 async function confirmPlayers(page, count = 3) {
   await page.getByTestId('player-count').selectOption(String(count));
   await page.getByTestId('set-players').click();
@@ -143,20 +148,22 @@ test.describe('setup snake through production turn', () => {
     await expect(page.getByTestId('roll-dice')).toBeEnabled();
     await expect(page.getByTestId('end-turn')).toBeDisabled();
 
-    // Fixed non-7 dice via test API (same path as UI roll, but deterministic).
-    await page.evaluate(() => {
-      window.__CATAN_TEST_API.rollDice([2, 3]);
-    });
+    const productionCandidate = afterSetup.productionCandidates[0];
+    expect(productionCandidate).toBeTruthy();
+    const productionDice = diceForTotal(productionCandidate.total);
+    await page.evaluate((dice) => window.__CATAN_TEST_API.rollDice(dice), productionDice);
 
     await expect
       .poll(async () => (await getTestState(page)).phase, { timeout: 10_000 })
       .toBe('action');
 
     const afterRoll = await getTestState(page);
-    expect(afterRoll.dice).toEqual([2, 3]);
+    expect(afterRoll.dice).toEqual(productionDice);
     expect(afterRoll.logLength).toBe(13);
     expect(afterRoll.feedback.status).toBe('success');
-    await expect(page.getByTestId('last-roll')).toContainText('2 + 3 = 5');
+    expect(afterRoll.lastProduction.total).toBe(productionCandidate.total);
+    await expect(page.getByTestId('roll-outcome')).toBeVisible();
+    await expect.poll(async () => page.evaluate(() => window.__CATAN_SCENE_STATS.productionHighlights)).toBeGreaterThan(0);
 
     await page.evaluate(() => window.__CATAN_TEST_API.beginInteraction('placeRoad'));
     await expect(page.getByTestId('cancel-interaction')).toBeVisible();
@@ -174,6 +181,12 @@ test.describe('setup snake through production turn', () => {
     const afterEnd = await getTestState(page);
     expect(afterEnd.currentPlayerId).toBe('blue');
     await expect(page.getByTestId('player-state-blue')).toHaveAttribute('data-active', 'true');
+
+    const shortageCandidate = afterEnd.productionCandidates[0];
+    await page.evaluate(({ resource }) => window.__CATAN_TEST_API.setBank(resource, 0), shortageCandidate);
+    await page.evaluate((dice) => window.__CATAN_TEST_API.rollDice(dice), diceForTotal(shortageCandidate.total));
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+    await expect(page.getByTestId('roll-outcome')).toContainText(`Bank shortage: no ${shortageCandidate.resource}`);
   });
 
   test('restart game resets to a fresh setup phase', async ({ page }) => {
@@ -263,5 +276,49 @@ test.describe('setup snake through production turn', () => {
     expect(afterSettlement.inventories.red.settlement).toBe(beforeSettlement.inventories.red.settlement - 1);
     expect(afterSettlement.phase).toBe('action');
     await expect(page.getByTestId('end-turn')).toBeEnabled();
+  });
+
+  test('resolves discards, robber movement, and victim selection after a 7', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+    await page.evaluate(() => window.__CATAN_TEST_API.giveResources('blue', { wood: 4, brick: 4 }));
+    await page.evaluate(() => window.__CATAN_TEST_API.rollDice([3, 4]));
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('discard');
+    await expect(page.getByTestId('discard-workflow')).toBeVisible();
+
+    const discardState = await getTestState(page);
+    const required = discardState.resources.blue
+      ? Math.floor(Object.values(discardState.resources.blue).reduce((sum, amount) => sum + amount, 0) / 2)
+      : 0;
+    const form = page.getByTestId('discard-form-blue');
+    let remaining = required;
+    for (const resource of ['wood', 'brick', 'ore', 'hay', 'sheep']) {
+      const take = Math.min(remaining, discardState.resources.blue[resource]);
+      for (let count = 0; count < take; count += 1) await form.getByRole('button', { name: `Add ${resource}` }).click();
+      remaining -= take;
+    }
+    expect(remaining).toBe(0);
+    await form.getByRole('button', { name: new RegExp(`Discard ${required}/${required}`) }).click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('robber');
+    expect((await getTestState(page)).interactionMode).toBe('moveRobber');
+
+    const robberState = await getTestState(page);
+    const target = robberState.robberOptions.find((option) => option.victimIds.length > 0);
+    expect(target).toBeTruthy();
+    const victimId = target.victimIds[0];
+    const victimTotalBefore = Object.values(robberState.resources[victimId]).reduce((sum, amount) => sum + amount, 0);
+    await page.evaluate((tileId) => window.__CATAN_TEST_API.selectTarget(tileId), target.tileId);
+    await expect(page.getByTestId(`rob-victim-${victimId}`)).toBeVisible();
+    await page.getByTestId(`rob-victim-${victimId}`).click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+    const afterRobbery = await getTestState(page);
+    expect(afterRobbery.robberTileId).toBe(target.tileId);
+    await expect.poll(async () => page.evaluate(() => window.__CATAN_SCENE_STATS.robberTileId)).toBe(target.tileId);
+    expect(Object.values(afterRobbery.resources[victimId]).reduce((sum, amount) => sum + amount, 0)).toBe(victimTotalBefore - 1);
+    await expect(page.getByTestId('roll-outcome')).toContainText('lost one hidden resource');
   });
 });

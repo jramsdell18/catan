@@ -6,6 +6,7 @@ import {
   describeLogEntry,
   formatCost,
   getBuildAvailability,
+  getEligibleRobberVictims,
   getInteractionMode,
   getLegalTargets,
   INTERACTION_MODES,
@@ -56,6 +57,19 @@ describe('board interaction model', () => {
     expect(actionForTarget(INTERACTION_MODES.MOVE_ROBBER, game, 'hex-1')).toMatchObject({
       type: 'moveRobber', tileId: 'hex-1', playerId: 'red',
     });
+  });
+
+  it('automatically enters robber mode and finds adjacent victims with cards', () => {
+    const { game } = liveGame();
+    const robberGame = structuredClone(game);
+    robberGame.phase = 'robber';
+    const victim = robberGame.players[1];
+    victim.resources.wood = 1;
+    const victimIntersection = Object.keys(robberGame.board.intersections)[0];
+    robberGame.board.intersections[victimIntersection].building = { type: 'settlement', playerId: victim.id };
+    const tile = Object.values(robberGame.board.tiles).find((item) => item.intersections.includes(victimIntersection));
+    expect(getInteractionMode(robberGame)).toBe(INTERACTION_MODES.MOVE_ROBBER);
+    expect(getEligibleRobberVictims(robberGame, tile.id).map((player) => player.id)).toContain(victim.id);
   });
 
   it('describes engine log entries for the user-facing history', () => {
