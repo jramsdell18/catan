@@ -183,7 +183,7 @@ Players can complete a pass-and-play game on one device without casually exposin
 - [ ] Test the complete game on desktop and mobile viewports.
 - [ ] Add deterministic test-board and dice controls available only in development/test builds.
 - [ ] Resolve production bundle-size warnings or document the accepted tradeoff.
-- [ ] Run `npm test`, `npm run test:render`, and `npm run build` in CI.
+- [x] Run `npm test`, board-rules, Playwright e2e, and `npm run build` in CI (`.github/workflows/ci.yml`).
 
 ### Done when
 

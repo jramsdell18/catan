@@ -20,6 +20,9 @@ npm install
 # Everything (unit + board node test + Playwright)
 npm run test:all
 
+# Same checks GitHub Actions runs (unit + board + build + e2e)
+npm run test:ci
+
 # Fast feedback while coding
 npm run test:watch
 ```
@@ -28,6 +31,46 @@ First-time Playwright browsers (if needed):
 
 ```bash
 npx playwright install
+# On Linux CI images, use:
+# npx playwright install --with-deps chromium
+```
+
+---
+
+## Continuous integration (GitHub Actions)
+
+Workflow file: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+
+| When | What runs |
+|------|-----------|
+| **Pull request → `main`** | Unit tests, production build, Playwright e2e |
+| **Push to `main`** | Same checks (confirms the merged tree is green) |
+
+Jobs run **in parallel** where possible:
+
+1. **Unit tests** — `npm test` + `npm run test:rules`
+2. **Production build** — `npm run build`
+3. **Playwright e2e** — install Chromium, then `npm run test:e2e` with `CI=true`
+
+### Do we run CI before merging to main?
+
+**Yes — that is the intended gate.** On GitHub:
+
+1. Open a PR into `main` (or push a branch and open a PR).
+2. Wait for the **CI** workflow to finish green.
+3. Merge only after checks pass.
+
+Optional but recommended: **Settings → Branches → Branch protection** on `main`:
+
+- Require a pull request before merging
+- Require status checks to pass: `Unit tests`, `Production build`, `Playwright e2e`
+
+Direct pushes to `main` still *run* CI (so you see failures), but only branch protection *blocks* merge of red PRs. Prefer PRs for anything non-trivial.
+
+Locally, mirror CI before you open a PR:
+
+```bash
+npm run test:ci
 ```
 
 ---
@@ -45,6 +88,7 @@ npx playwright install
 | `npm run test:e2e:flow` | UI game-flow specs only |
 | `npm run test:render` | 3D canvas smoke only |
 | `npm run test:all` | `test` + `test:rules` + `test:e2e` |
+| `npm run test:ci` | Full CI mirror: unit + board-rules + build + e2e |
 
 ---
 

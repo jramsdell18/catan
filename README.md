@@ -41,9 +41,20 @@ The engine already implements robber/discard, building, development cards, and t
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
-- `npm run test:all` runs the full automated suite (unit + board + e2e).
+- `npm run test:all` runs unit + board + Playwright e2e.
+- `npm run test:ci` mirrors GitHub Actions (unit + board + build + e2e).
 
-**Testing details** (what each suite covers, how to run a single file or single test for debugging): see **[`tests/README.md`](tests/README.md)**.
+**Testing details** (suites, single-test commands, CI): see **[`tests/README.md`](tests/README.md)**.
+
+## CI
+
+GitHub Actions runs on **every pull request to `main`** and **every push to `main`** (see `.github/workflows/ci.yml`):
+
+1. Unit tests (`npm test` + `npm run test:rules`)
+2. Production build (`npm run build`)
+3. Playwright e2e (`npm run test:e2e`)
+
+**Before merging to main:** open a PR and wait for the CI checks to pass. Enable branch protection on `main` to require those checks if you want merges blocked when red.
 
 ## Project layout
 
