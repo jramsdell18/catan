@@ -5,7 +5,7 @@ import { createPlayerInventories, getActivePlayers } from './game/pieces.js';
 import { createBoardPorts, createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
 import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
-import JitsiOverlay from './stream/JitsiOverlay.jsx';
+import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
 const PLAYER_COUNT_OPTIONS = [3, 4];
@@ -217,6 +217,7 @@ function App() {
           onPlaceRoad={handlePlaceRoad}
           diceRoll={diceRoll}
         />
+        <LiveKitTableCall players={activePlayers} />
 
         {!game && (
           <div className="start-overlay" aria-labelledby="start-title">
@@ -347,8 +348,6 @@ function App() {
           </div>
         )}
       </section>
-
-      <JitsiOverlay />
     </main>
   );
 }
