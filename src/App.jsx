@@ -2,19 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
-import { getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
-import { createStartingResourceCards } from './game/resources.js';
-import {
-  createSetupOrder,
-  getCurrentSetupTurn,
-  getSetupProgress,
-  pickRandomStartingSeat,
-} from './game/setupFlow.js';
-import {
-  createBoardTopology,
-  getAllowedRoadEdges,
-  getAllowedSettlementVertices,
-} from './game/topology.js';
+import { createPlayerInventories, getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
+import { createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
+import { createBoardTopology } from './game/topology.js';
+import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
 
 const DEFAULT_PLAYER_COUNT = 4;
 
@@ -23,79 +14,81 @@ function App() {
   const [confirmedPlayers, setConfirmedPlayers] = useState(null);
   const [board, setBoard] = useState(() => createRandomBoard());
   const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [setup, setSetup] = useState(null);
-  const [placements, setPlacements] = useState({ settlements: [], roads: [] });
-  const [pendingSettlementVertexId, setPendingSettlementVertexId] = useState(null);
+  const [game, setGame] = useState(null);
+  const [gameError, setGameError] = useState('');
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
   const topology = useMemo(() => createBoardTopology(board.hexes), [board.hexes]);
-  const resourceHands = useMemo(
-    () => createStartingResourceCards(activePlayers, topology, placements, setup?.status),
-    [activePlayers, placements, setup?.status, topology],
+  const placements = useMemo(() => placementsFromGame(game), [game]);
+  const resourceHands = useMemo(() => resourceHandsFromGame(game, activePlayers), [activePlayers, game]);
+  const playerInventories = useMemo(
+    () => createPlayerInventories(activePlayers, placements),
+    [activePlayers, placements],
   );
-  const currentSetupTurn = useMemo(() => getCurrentSetupTurn(setup), [setup]);
-  const setupProgress = useMemo(() => getSetupProgress(setup), [setup]);
-  const activeSetupPlayer = useMemo(() => {
-    if (!currentSetupTurn) {
-      return null;
-    }
-
-    return activePlayers.find((player) => player.id === currentSetupTurn.playerId) ?? null;
-  }, [activePlayers, currentSetupTurn]);
+  const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
 
   const playerMessage = useMemo(() => {
-    if (setup?.status === 'complete') {
-      return 'Setup complete. Starting resource cards were dealt from each second settlement.';
-    }
-
-    if (activeSetupPlayer && setup?.status === 'placing') {
-      const piece = setup.phase === 'settlement' ? 'settlement' : 'road';
-      return `${activeSetupPlayer.label} places a ${piece} now.`;
-    }
-
     if (!confirmedPlayers) {
       return 'Choose a player count to start the room setup.';
     }
-
+    if (!game) return `${confirmedPlayers} players selected. Start the game when ready.`;
+    if (game.phase === 'setup') {
+      return `${currentPlayer?.label ?? 'Current player'} places a ${game.setupSettlementId ? 'road' : 'settlement'}.`;
+    }
+    if (game.phase === 'roll') return `${currentPlayer?.label} rolls the dice.`;
+    if (game.phase === 'robber') return `${currentPlayer?.label} must move the robber (UI coming next).`;
+    if (game.phase === 'discard') return 'Players with more than seven cards must discard (UI coming next).';
+    if (game.phase === 'gameOver') return `${currentPlayer?.label ?? 'A player'} won the game.`;
+    if (game.phase === 'action') return `${currentPlayer?.label} may build, trade, or end the turn.`;
     return `${confirmedPlayers} players selected. Start the game to choose the first player.`;
-  }, [activeSetupPlayer, confirmedPlayers, setup]);
+  }, [confirmedPlayers, currentPlayer, game]);
 
   const placementOptions = useMemo(() => {
-    if (!setup || setup.status !== 'placing') {
+    if (!game || game.phase !== 'setup') {
       return { settlements: [], roads: [] };
     }
-
-    if (setup.phase === 'settlement') {
+    if (!game.setupSettlementId) {
       return {
-        settlements: getAllowedSettlementVertices(topology, placements),
+        settlements: topology.vertices.filter((vertex) =>
+          canPlaceSettlement(game.board, vertex.id, game.currentPlayerId, false),
+        ),
         roads: [],
       };
     }
-
-    if (!pendingSettlementVertexId) {
-      return { settlements: [], roads: [] };
-    }
-
     return {
       settlements: [],
-      roads: getAllowedRoadEdges(topology, placements, pendingSettlementVertexId),
+      roads: topology.edges.filter((edge) =>
+        canPlaceRoad(game.board, edge.id, game.currentPlayerId, game.setupSettlementId),
+      ),
     };
-  }, [pendingSettlementVertexId, placements, setup, topology]);
+  }, [game, topology]);
+
+  const dispatch = useCallback((action) => {
+    setGame((current) => {
+      if (!current) return current;
+      try {
+        const next = applyAction(current, action);
+        setGameError('');
+        return next;
+      } catch (error) {
+        setGameError(error.message);
+        return current;
+      }
+    });
+  }, []);
 
   function handleConfirm(event) {
     event.preventDefault();
     setConfirmedPlayers(selectedPlayers);
-    setSetup(null);
-    setPlacements({ settlements: [], roads: [] });
-    setPendingSettlementVertexId(null);
+    setGame(null);
+    setGameError('');
   }
 
   function handleRandomizeBoard() {
     setBoard(createRandomBoard());
-    setSetup(null);
-    setPlacements({ settlements: [], roads: [] });
-    setPendingSettlementVertexId(null);
+    setGame(null);
+    setGameError('');
   }
 
   function handleResetCamera() {
@@ -104,87 +97,30 @@ function App() {
 
   function handleStartGame() {
     const players = getActivePlayers(confirmedPlayers ?? selectedPlayers);
-    const startingSeat = pickRandomStartingSeat(players);
-
-    setSetup({
-      status: 'placing',
-      order: createSetupOrder(players, startingSeat),
-      turnIndex: 0,
-      phase: 'settlement',
-      startingSeat,
-    });
-    setPlacements({ settlements: [], roads: [] });
-    setPendingSettlementVertexId(null);
+    const rulesBoard = createRulesBoard(board, topology);
+    setGame(createGame({
+      board: rulesBoard,
+      players: players.map((player) => ({ ...player, name: player.label })),
+    }));
+    setGameError('');
   }
 
   const handlePlaceSettlement = useCallback(
     (vertexId) => {
-      if (!setup || setup.status !== 'placing' || setup.phase !== 'settlement' || !currentSetupTurn) {
-        return;
+      if (game?.phase === 'setup' && !game.setupSettlementId) {
+        dispatch({ type: 'placeSettlement', playerId: game.currentPlayerId, intersectionId: vertexId });
       }
-
-      const isAllowed = placementOptions.settlements.some((vertex) => vertex.id === vertexId);
-
-      if (!isAllowed) {
-        return;
-      }
-
-      setPlacements((current) => ({
-        ...current,
-        settlements: [
-          ...current.settlements,
-          {
-            id: `settlement-${current.settlements.length + 1}`,
-            playerId: currentSetupTurn.playerId,
-            vertexId,
-            setupTurnId: currentSetupTurn.id,
-            setupRound: currentSetupTurn.round,
-          },
-        ],
-      }));
-      setPendingSettlementVertexId(vertexId);
-      setSetup((current) => ({ ...current, phase: 'road' }));
     },
-    [currentSetupTurn, placementOptions.settlements, setup],
+    [dispatch, game],
   );
 
   const handlePlaceRoad = useCallback(
     (edgeId) => {
-      if (!setup || setup.status !== 'placing' || setup.phase !== 'road' || !currentSetupTurn) {
-        return;
+      if (game?.phase === 'setup' && game.setupSettlementId) {
+        dispatch({ type: 'placeRoad', playerId: game.currentPlayerId, edgeId });
       }
-
-      const isAllowed = placementOptions.roads.some((edge) => edge.id === edgeId);
-
-      if (!isAllowed) {
-        return;
-      }
-
-      setPlacements((current) => ({
-        ...current,
-        roads: [
-          ...current.roads,
-          {
-            id: `road-${current.roads.length + 1}`,
-            playerId: currentSetupTurn.playerId,
-            edgeId,
-            setupTurnId: currentSetupTurn.id,
-          },
-        ],
-      }));
-
-      setPendingSettlementVertexId(null);
-      setSetup((current) => {
-        const nextTurnIndex = current.turnIndex + 1;
-
-        if (nextTurnIndex >= current.order.length) {
-          return { ...current, status: 'complete', turnIndex: nextTurnIndex, phase: 'complete' };
-        }
-
-        return { ...current, turnIndex: nextTurnIndex, phase: 'settlement' };
-      });
     },
-    [currentSetupTurn, placementOptions.roads, setup],
+    [dispatch, game],
   );
 
   return (
@@ -214,20 +150,42 @@ function App() {
             Reset Camera
           </button>
           <button type="button" onClick={handleStartGame} disabled={!confirmedPlayers}>
-            Start Game
+            {game ? 'Restart Game' : 'Start Game'}
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'rollDice', playerId: game.currentPlayerId })}
+            disabled={game?.phase !== 'roll'}
+          >
+            Roll Dice
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
+            disabled={game?.phase !== 'action'}
+          >
+            End Turn
           </button>
         </div>
 
         <div className="status-panel">
           <p className="status-label">Room setup</p>
           <p className="status-message">{playerMessage}</p>
-          {setupProgress && (
-            <p className="helper-text">
-              Setup turns: {Math.min(setupProgress.completedTurns + 1, setupProgress.totalTurns)}/
-              {setupProgress.totalTurns}
-            </p>
-          )}
+          {game && <p className="helper-text">Engine phase: {game.phase}</p>}
+          {game?.dice && <p className="helper-text">Last roll: {game.dice.join(' + ')} = {game.dice[0] + game.dice[1]}</p>}
+          {gameError && <p className="game-error" role="alert">{gameError}</p>}
         </div>
+
+        {game && (
+          <div className="player-state-list" aria-label="Player resources">
+            {game.players.map((player) => (
+              <div className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'} key={player.id}>
+                <strong>{player.name}</strong>
+                <span>{Object.entries(player.resources).map(([resource, count]) => `${resource}: ${count}`).join(' · ')}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="inventory-grid" aria-label="Catan piece inventory">
           {Object.values(PLAYER_PIECE_TYPES).map((piece) => (
@@ -244,6 +202,7 @@ function App() {
           board={board}
           activePlayers={activePlayers}
           resourceHands={resourceHands}
+          playerInventories={playerInventories}
           cameraResetKey={cameraResetKey}
           topology={topology}
           placements={placements}
@@ -257,15 +216,15 @@ function App() {
             <p className="status-label">Board seed</p>
             <p className="seed-value">{board.seed}</p>
           </div>
-          {setup?.startingSeat && (
+          {game && (
             <div>
-              <p className="status-label">First player</p>
-              <p className="seed-value">Seat {setup.startingSeat}</p>
+              <p className="status-label">Current player</p>
+              <p className="seed-value">{currentPlayer?.label}</p>
             </div>
           )}
-          {setup?.status === 'complete' && (
+          {game && (
             <div>
-              <p className="status-label">Cards dealt</p>
+              <p className="status-label">Cards in play</p>
               <p className="seed-value">
                 {resourceHands.reduce((total, hand) => total + hand.cards.length, 0)}
               </p>

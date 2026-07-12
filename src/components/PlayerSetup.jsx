@@ -1,4 +1,4 @@
-const PLAYER_OPTIONS = [2, 3, 4, 5, 6];
+const PLAYER_OPTIONS = [3, 4];
 
 function PlayerSetup({ selectedPlayers, confirmedPlayers, onChangePlayers, onConfirm }) {
   return (

@@ -2,7 +2,7 @@ export const TERRAIN_TYPES = {
   forest: {
     id: 'forest',
     label: 'Forest',
-    resource: 'lumber',
+    resource: 'wood',
     count: 4,
     color: '#2f7d4f',
     textColor: '#f7fbf2',
@@ -10,7 +10,7 @@ export const TERRAIN_TYPES = {
   fields: {
     id: 'fields',
     label: 'Fields',
-    resource: 'grain',
+    resource: 'hay',
     count: 4,
     color: '#d8b541',
     textColor: '#211a08',
@@ -34,7 +34,7 @@ export const TERRAIN_TYPES = {
   pasture: {
     id: 'pasture',
     label: 'Pasture',
-    resource: 'wool',
+    resource: 'sheep',
     count: 4,
     color: '#82a957',
     textColor: '#16220d',

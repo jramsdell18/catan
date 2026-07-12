@@ -108,17 +108,17 @@ function addPlacementHighlights(world, placementOptions, interactionTargets) {
 }
 
 const PLAYER_RACK_SPOTS = [
-  { x: 0, z: 7.9, rotation: 0 },
-  { x: 0, z: -7.9, rotation: Math.PI },
-  { x: -8.6, z: 0, rotation: -Math.PI / 2 },
-  { x: 8.6, z: 0, rotation: Math.PI / 2 },
-  { x: -7.15, z: -6.9, rotation: -Math.PI * 0.75 },
-  { x: 7.15, z: 6.9, rotation: Math.PI * 0.25 },
+  { x: 0, z: 7.25, rotation: 0 },
+  { x: 0, z: -7.25, rotation: Math.PI },
+  { x: -7.8, z: 0, rotation: -Math.PI / 2 },
+  { x: 7.8, z: 0, rotation: Math.PI / 2 },
+  { x: -6.45, z: -6.25, rotation: -Math.PI * 0.75 },
+  { x: 6.45, z: 6.25, rotation: Math.PI * 0.25 },
 ];
 
-const CARD_AREA_WIDTH = 1.55;
-const CARD_WIDTH = 0.36;
-const CARD_MAX_SPACING = 0.18;
+const CARD_AREA_WIDTH = 3.1;
+const CARD_WIDTH = 0.78;
+const CARD_MAX_SPACING = 0.36;
 const PLAYER_TABLE_SURFACE_Y = -0.22;
 
 function createCardStack(cards) {
@@ -140,36 +140,87 @@ function createCardStack(cards) {
   return group;
 }
 
-function createPlayerArea(player, cards) {
+function createRoadInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-roads';
+
+  Array.from({ length: count }, (_, index) => {
+    const road = createRoadMesh(player.color);
+    const col = index % 5;
+    const row = Math.floor(index / 5);
+    const isRightSideRow = row === 2;
+    const x = isRightSideRow ? 0.12 + col * 0.28 : -1.35 + col * 0.28;
+    const z = isRightSideRow ? -0.95 : -1.2 + row * 0.68;
+    road.position.set(x, 0, z);
+    road.rotation.y = -Math.PI / 2;
+    group.add(road);
+
+    return road;
+  });
+
+  return group;
+}
+
+function createSettlementInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-settlements';
+
+  Array.from({ length: count }, (_, index) => {
+    const settlement = createSettlementMesh(player.color);
+    settlement.position.set(-1.38 + index * 0.42, 0, 0.34);
+    group.add(settlement);
+
+    return settlement;
+  });
+
+  return group;
+}
+
+function createCityInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-cities';
+
+  Array.from({ length: count }, (_, index) => {
+    const city = createCityMesh(player.color);
+    city.position.set(0.38 + index * 0.56, 0, 0.23);
+    group.add(city);
+
+    return city;
+  });
+
+  return group;
+}
+
+function createPlayerArea(player, cards, inventory) {
   const playerGroup = new THREE.Group();
   playerGroup.name = `player-${player.seat}-${player.id}-area`;
 
-  const road = createRoadMesh(player.color);
-  road.position.set(-1.08, 0, 0);
-  road.rotation.y = -Math.PI / 8;
-
-  const settlement = createSettlementMesh(player.color);
-  settlement.position.set(-0.6, 0, 0);
-
-  const city = createCityMesh(player.color);
-  city.position.set(-0.12, 0, 0);
-
   const cardStack = createCardStack(cards);
-  cardStack.position.set(0.95, 0, 0);
+  cardStack.position.set(2.1, 0, -0.72);
 
-  playerGroup.add(road, settlement, city, cardStack);
+  playerGroup.add(
+    createRoadInventory(player, inventory.road),
+    createSettlementInventory(player, inventory.settlement),
+    createCityInventory(player, inventory.city),
+    cardStack,
+  );
 
   return playerGroup;
 }
 
-function addPlayerAreas(world, activePlayers, resourceHands) {
+function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) {
   const rack = new THREE.Group();
   rack.name = 'player-areas';
 
   activePlayers.forEach((player, index) => {
     const spot = PLAYER_RACK_SPOTS[index % PLAYER_RACK_SPOTS.length];
     const cards = resourceHands.find((hand) => hand.playerId === player.id)?.cards ?? [];
-    const playerGroup = createPlayerArea(player, cards);
+    const inventory = playerInventories.find((item) => item.playerId === player.id) ?? {
+      road: 0,
+      settlement: 0,
+      city: 0,
+    };
+    const playerGroup = createPlayerArea(player, cards, inventory);
     playerGroup.position.set(spot.x, PLAYER_TABLE_SURFACE_Y, spot.z);
     playerGroup.rotation.y = spot.rotation;
 
@@ -183,6 +234,7 @@ function CatanScene({
   board,
   activePlayers,
   resourceHands,
+  playerInventories,
   cameraResetKey,
   topology,
   placements,
@@ -222,8 +274,8 @@ function CatanScene({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 6;
-    controls.maxDistance = 18;
+    controls.minDistance = 8;
+    controls.maxDistance = 24;
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.target.set(0, 0.2, 0.3);
 
@@ -252,11 +304,11 @@ function CatanScene({
     world.add(playerTable);
 
     const boardTable = new THREE.Mesh(
-      new THREE.CylinderGeometry(5.8, 5.8, 0.08, 6),
+      new THREE.CylinderGeometry(5.8, 5.8, 0.2, 6),
       new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 }),
     );
     boardTable.rotation.y = Math.PI / 6;
-    boardTable.position.y = -0.16;
+    boardTable.position.y = -0.02;
     boardTable.receiveShadow = true;
     world.add(boardTable);
 
@@ -264,7 +316,7 @@ function CatanScene({
     addPlacedPieces(world, activePlayers, topology, placements);
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
-    addPlayerAreas(world, activePlayers, resourceHands);
+    addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
@@ -282,7 +334,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 14.2 : 12.6, isNarrow ? 14.6 : 13.2);
+      camera.position.set(0, isNarrow ? 17.5 : 15.4, isNarrow ? 17.8 : 16.2);
       camera.lookAt(controls.target);
       controls.update();
     }
@@ -377,6 +429,7 @@ function CatanScene({
     onPlaceSettlement,
     placementOptions,
     placements,
+    playerInventories,
     resourceHands,
     topology,
   ]);

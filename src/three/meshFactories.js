@@ -5,6 +5,18 @@ const HEX_HEIGHT = 0.22;
 const HEX_ROTATION = Math.PI / 6;
 const HEX_OUTLINE_CORNER_START = Math.PI / 6;
 const HEX_TILE_CORNER_START = HEX_OUTLINE_CORNER_START + HEX_ROTATION;
+const NUMBER_TOKEN_PIPS = {
+  2: 1,
+  3: 2,
+  4: 3,
+  5: 4,
+  6: 5,
+  8: 5,
+  9: 4,
+  10: 3,
+  11: 2,
+  12: 1,
+};
 
 function makeMaterial(color, options = {}) {
   return new THREE.MeshStandardMaterial({
@@ -25,6 +37,71 @@ function addTileTrim(group, radius) {
   group.add(trim);
 }
 
+function createNumberTokenTexture(number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+
+  const context = canvas.getContext('2d');
+  const isRedNumber = number === 6 || number === 8;
+  const textColor = isRedNumber ? '#b52424' : '#1c1712';
+  const pipCount = NUMBER_TOKEN_PIPS[number] ?? 0;
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#f5ead0';
+  context.beginPath();
+  context.arc(80, 80, 72, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = '#7a4b2a';
+  context.lineWidth = 5;
+  context.stroke();
+
+  context.fillStyle = textColor;
+  context.font = '800 58px Arial';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(String(number), 80, 70);
+
+  const pipSpacing = 10;
+  const startX = 80 - ((pipCount - 1) * pipSpacing) / 2;
+  context.fillStyle = textColor;
+
+  for (let index = 0; index < pipCount; index += 1) {
+    context.beginPath();
+    context.arc(startX + index * pipSpacing, 116, 3.2, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  return texture;
+}
+
+function createNumberTokenMesh(number) {
+  const group = new THREE.Group();
+  const disk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.31, 0.31, 0.035, 40),
+    new THREE.MeshStandardMaterial({ color: '#f5ead0', roughness: 0.7 }),
+  );
+  disk.position.y = HEX_HEIGHT / 2 + 0.04;
+  disk.castShadow = true;
+  group.add(disk);
+
+  const tokenFace = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.62, 0.62),
+    new THREE.MeshBasicMaterial({
+      map: createNumberTokenTexture(number),
+      transparent: true,
+    }),
+  );
+  tokenFace.rotation.x = -Math.PI / 2;
+  tokenFace.position.y = HEX_HEIGHT / 2 + 0.06;
+  group.add(tokenFace);
+
+  return group;
+}
+
 export function createHexTileMesh(hex, radius = 1) {
   const terrain = TERRAIN_TYPES[hex.terrainId];
   const group = new THREE.Group();
@@ -37,6 +114,10 @@ export function createHexTileMesh(hex, radius = 1) {
   group.add(mesh);
 
   addTileTrim(group, radius);
+
+  if (hex.number) {
+    group.add(createNumberTokenMesh(hex.number));
+  }
 
   return group;
 }
@@ -140,7 +221,7 @@ export function createResourceCardMesh() {
   const sideMaterial = new THREE.MeshStandardMaterial({ color: '#173f86', roughness: 0.8 });
   const topMaterial = new THREE.MeshBasicMaterial({ map: texture });
   const card = new THREE.Mesh(
-    new THREE.BoxGeometry(0.39, cardThickness, 0.57),
+    new THREE.BoxGeometry(0.78, cardThickness, 1.14),
     [sideMaterial, sideMaterial, topMaterial, sideMaterial, sideMaterial, sideMaterial],
   );
   card.position.y = cardThickness / 2;

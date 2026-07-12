@@ -48,3 +48,20 @@ export function getActivePlayers(playerCount) {
     seat: index + 1,
   }));
 }
+
+export function createPlayerInventories(players, placements) {
+  return players.map((player) => {
+    const placedRoads = placements.roads.filter((road) => road.playerId === player.id).length;
+    const placedSettlements = placements.settlements.filter(
+      (settlement) => settlement.playerId === player.id,
+    ).length;
+    const placedCities = placements.cities?.filter((city) => city.playerId === player.id).length ?? 0;
+
+    return {
+      playerId: player.id,
+      road: PLAYER_PIECE_TYPES.road.maxPerPlayer - placedRoads,
+      settlement: PLAYER_PIECE_TYPES.settlement.maxPerPlayer - placedSettlements,
+      city: PLAYER_PIECE_TYPES.city.maxPerPlayer - placedCities,
+    };
+  });
+}
