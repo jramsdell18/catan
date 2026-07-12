@@ -7,6 +7,7 @@ import {
   createCityMesh,
   createDiceMesh,
   createHexHighlightMesh,
+  createHexOutlineHighlightMesh,
   createHexTileMesh,
   createPortMesh,
   createResourceCardMesh,
@@ -151,14 +152,15 @@ function addBoardHighlights(world, legalTargets, interactionMode, interactionTar
   world.add(highlights);
 }
 
-function addProductionHighlights(world, board, productionTileIds) {
+function addProductionHighlights(world, board, productionTileIds, animatedHighlights) {
   const group = new THREE.Group();
   group.name = 'production-highlights';
   productionTileIds.forEach((tileId) => {
     const hex = board.hexes.find((item) => item.hexId === tileId);
     if (!hex) return;
-    const highlight = createHexHighlightMesh('#68d391');
-    highlight.position.set(hex.world.x, 0.24, hex.world.z);
+    const highlight = createHexOutlineHighlightMesh();
+    highlight.position.set(hex.world.x, 0.34, hex.world.z);
+    animatedHighlights.push(highlight);
     group.add(highlight);
   });
   world.add(group);
@@ -501,7 +503,7 @@ function CatanScene({
     addPorts(world, ports, topology);
     addPlacedPieces(world, activePlayers, topology, placements);
     addBoardHighlights(world, legalTargets, interactionMode, interactionTargets);
-    addProductionHighlights(world, board, productionTileIds);
+    addProductionHighlights(world, board, productionTileIds, animatedHighlights);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     addDiceArea(world, diceRoll, animatedDice);

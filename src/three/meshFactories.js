@@ -301,6 +301,23 @@ export function createHexHighlightMesh(color = '#f7dc6f') {
   return mesh;
 }
 
+export function createHexOutlineHighlightMesh(color = '#ffbf2f') {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.92,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  });
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 0.98, 6, 1, HEX_OUTLINE_CORNER_START),
+    material,
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.renderOrder = 20;
+  return ring;
+}
+
 export function createCityMesh(color) {
   const group = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.34, 0.38), makeMaterial(color));
