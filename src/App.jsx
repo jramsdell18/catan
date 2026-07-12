@@ -3,6 +3,7 @@ import CatanScene from './components/CatanScene.jsx';
 import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
 import { getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
+import { createStartingResourceCards } from './game/resources.js';
 import {
   createSetupOrder,
   getCurrentSetupTurn,
@@ -29,6 +30,10 @@ function App() {
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
   const topology = useMemo(() => createBoardTopology(board.hexes), [board.hexes]);
+  const resourceHands = useMemo(
+    () => createStartingResourceCards(activePlayers, topology, placements, setup?.status),
+    [activePlayers, placements, setup?.status, topology],
+  );
   const currentSetupTurn = useMemo(() => getCurrentSetupTurn(setup), [setup]);
   const setupProgress = useMemo(() => getSetupProgress(setup), [setup]);
   const activeSetupPlayer = useMemo(() => {
@@ -41,7 +46,7 @@ function App() {
 
   const playerMessage = useMemo(() => {
     if (setup?.status === 'complete') {
-      return 'Setup complete. Every player has placed two settlements and two roads.';
+      return 'Setup complete. Starting resource cards were dealt from each second settlement.';
     }
 
     if (activeSetupPlayer && setup?.status === 'placing') {
@@ -133,6 +138,7 @@ function App() {
             playerId: currentSetupTurn.playerId,
             vertexId,
             setupTurnId: currentSetupTurn.id,
+            setupRound: currentSetupTurn.round,
           },
         ],
       }));
@@ -237,6 +243,7 @@ function App() {
         <CatanScene
           board={board}
           activePlayers={activePlayers}
+          resourceHands={resourceHands}
           cameraResetKey={cameraResetKey}
           topology={topology}
           placements={placements}
@@ -254,6 +261,14 @@ function App() {
             <div>
               <p className="status-label">First player</p>
               <p className="seed-value">Seat {setup.startingSeat}</p>
+            </div>
+          )}
+          {setup?.status === 'complete' && (
+            <div>
+              <p className="status-label">Cards dealt</p>
+              <p className="seed-value">
+                {resourceHands.reduce((total, hand) => total + hand.cards.length, 0)}
+              </p>
             </div>
           )}
         </div>

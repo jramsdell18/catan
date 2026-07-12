@@ -36,10 +36,16 @@ export function createBoardTopology(hexes) {
           id: `vertex-${verticesByKey.size + 1}`,
           x: position.x,
           z: position.z,
+          adjacentHexes: new Set(),
           neighborIds: new Set(),
           edgeIds: new Set(),
         });
       }
+
+      verticesByKey.get(key).adjacentHexes.add({
+        hexId: hex.hexId,
+        terrainId: hex.terrainId,
+      });
 
       return verticesByKey.get(key).id;
     });
@@ -82,6 +88,7 @@ export function createBoardTopology(hexes) {
   return {
     vertices: vertices.map((vertex) => ({
       ...vertex,
+      adjacentHexes: [...vertex.adjacentHexes],
       neighborIds: [...vertex.neighborIds],
       edgeIds: [...vertex.edgeIds],
     })),

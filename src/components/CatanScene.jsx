@@ -2,8 +2,10 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
+  createCardZoneMesh,
   createCityMesh,
   createHexTileMesh,
+  createResourceCardMesh,
   createRoadHighlightMesh,
   createRoadMesh,
   createRobberMesh,
@@ -62,7 +64,7 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
     }
 
     const piece = createSettlementMesh(getPlayerColor(activePlayers, settlement.playerId));
-    piece.position.set(vertex.x, 0.12, vertex.z);
+    piece.position.set(vertex.x, 0.11, vertex.z);
     placedGroup.add(piece);
   });
 
@@ -74,7 +76,7 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
     }
 
     const road = createRoadMesh(getPlayerColor(activePlayers, roadPlacement.playerId));
-    road.position.set(edge.x, 0.16, edge.z);
+    road.position.set(edge.x, 0.11, edge.z);
     road.rotation.y = edge.rotation + Math.PI / 2;
     placedGroup.add(road);
   });
@@ -107,41 +109,72 @@ function addPlacementHighlights(world, placementOptions, interactionTargets) {
 }
 
 const PLAYER_RACK_SPOTS = [
-  { x: 0, z: 6.75, rotation: 0 },
-  { x: 0, z: -6.75, rotation: Math.PI },
-  { x: -6.75, z: 0, rotation: -Math.PI / 2 },
-  { x: 6.75, z: 0, rotation: Math.PI / 2 },
-  { x: -5.85, z: -5.85, rotation: -Math.PI * 0.75 },
-  { x: 5.85, z: 5.85, rotation: Math.PI * 0.25 },
+  { x: 0, z: 7.9, rotation: 0 },
+  { x: 0, z: -7.9, rotation: Math.PI },
+  { x: -8.6, z: 0, rotation: -Math.PI / 2 },
+  { x: 8.6, z: 0, rotation: Math.PI / 2 },
+  { x: -7.15, z: -6.9, rotation: -Math.PI * 0.75 },
+  { x: 7.15, z: 6.9, rotation: Math.PI * 0.25 },
 ];
 
-function createPlayerPieceRack(player) {
+const CARD_AREA_WIDTH = 1.55;
+const CARD_WIDTH = 0.36;
+const CARD_MAX_SPACING = 0.18;
+const PLAYER_TABLE_SURFACE_Y = -0.22;
+
+function createCardStack(cards) {
+  const group = new THREE.Group();
+  group.name = 'face-down-resource-cards';
+
+  const zone = createCardZoneMesh();
+  group.add(zone);
+
+  const cardCount = cards.length;
+  const spacing =
+    cardCount <= 1 ? 0 : Math.min(CARD_MAX_SPACING, (CARD_AREA_WIDTH - CARD_WIDTH) / (cardCount - 1));
+  const startX = -((cardCount - 1) * spacing) / 2;
+
+  cards.forEach((card, index) => {
+    const cardMesh = createResourceCardMesh();
+    cardMesh.name = card.id;
+    cardMesh.position.set(startX + index * spacing, 0.04 + index * 0.003, 0);
+    group.add(cardMesh);
+  });
+
+  return group;
+}
+
+function createPlayerArea(player, cards) {
   const playerGroup = new THREE.Group();
-  playerGroup.name = `player-${player.seat}-${player.id}-pieces`;
+  playerGroup.name = `player-${player.seat}-${player.id}-area`;
 
   const road = createRoadMesh(player.color);
-  road.position.set(-0.48, 0, 0);
+  road.position.set(-1.08, 0, 0);
   road.rotation.y = -Math.PI / 8;
 
   const settlement = createSettlementMesh(player.color);
-  settlement.position.set(0, 0, 0);
+  settlement.position.set(-0.6, 0, 0);
 
   const city = createCityMesh(player.color);
-  city.position.set(0.5, 0, 0);
+  city.position.set(-0.12, 0, 0);
 
-  playerGroup.add(road, settlement, city);
+  const cardStack = createCardStack(cards);
+  cardStack.position.set(0.95, 0, 0);
+
+  playerGroup.add(road, settlement, city, cardStack);
 
   return playerGroup;
 }
 
-function addPieceRack(world, activePlayers) {
+function addPlayerAreas(world, activePlayers, resourceHands) {
   const rack = new THREE.Group();
-  rack.name = 'player-piece-racks';
+  rack.name = 'player-areas';
 
   activePlayers.forEach((player, index) => {
     const spot = PLAYER_RACK_SPOTS[index % PLAYER_RACK_SPOTS.length];
-    const playerGroup = createPlayerPieceRack(player);
-    playerGroup.position.set(spot.x, 0.2, spot.z);
+    const cards = resourceHands.find((hand) => hand.playerId === player.id)?.cards ?? [];
+    const playerGroup = createPlayerArea(player, cards);
+    playerGroup.position.set(spot.x, PLAYER_TABLE_SURFACE_Y, spot.z);
     playerGroup.rotation.y = spot.rotation;
 
     rack.add(playerGroup);
@@ -153,6 +186,7 @@ function addPieceRack(world, activePlayers) {
 function CatanScene({
   board,
   activePlayers,
+  resourceHands,
   cameraResetKey,
   topology,
   placements,
@@ -214,7 +248,7 @@ function CatanScene({
     const animatedHighlights = [];
 
     const playerTable = new THREE.Mesh(
-      new THREE.BoxGeometry(15, 0.12, 15),
+      new THREE.BoxGeometry(19, 0.12, 17),
       new THREE.MeshStandardMaterial({ color: '#7a4b2a', roughness: 0.86 }),
     );
     playerTable.position.y = -0.28;
@@ -234,7 +268,7 @@ function CatanScene({
     addPlacedPieces(world, activePlayers, topology, placements);
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
-    addPieceRack(world, activePlayers);
+    addPlayerAreas(world, activePlayers, resourceHands);
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
@@ -252,7 +286,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 12.5 : 10.8, isNarrow ? 12.6 : 11.4);
+      camera.position.set(0, isNarrow ? 14.2 : 12.6, isNarrow ? 14.6 : 13.2);
       camera.lookAt(controls.target);
       controls.update();
     }
@@ -347,6 +381,7 @@ function CatanScene({
     onPlaceSettlement,
     placementOptions,
     placements,
+    resourceHands,
     topology,
   ]);
 
