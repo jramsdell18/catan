@@ -274,8 +274,8 @@ function CatanScene({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 6;
-    controls.maxDistance = 18;
+    controls.minDistance = 8;
+    controls.maxDistance = 24;
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.target.set(0, 0.2, 0.3);
 
@@ -334,7 +334,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 14.2 : 12.6, isNarrow ? 14.6 : 13.2);
+      camera.position.set(0, isNarrow ? 17.5 : 15.4, isNarrow ? 17.8 : 16.2);
       camera.lookAt(controls.target);
       controls.update();
     }
