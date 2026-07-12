@@ -24,6 +24,11 @@ for (const viewport of viewports) {
     await expect(scene).toBeVisible();
     await expect(canvas).toBeVisible();
     await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
+    const sceneStats = await page.evaluate(() => window.__CATAN_SCENE_STATS);
+    expect(sceneStats.hexes).toBe(19);
+    expect(sceneStats.numberTokens).toBe(18);
+    expect(sceneStats.ports).toBe(9);
+    expect(sceneStats.robberTileId).toBeTruthy();
 
     const screenshot = await scene.screenshot({ path: `test-results/catan-3d-${viewport.name}.png` });
     const image = PNG.sync.read(screenshot);

@@ -19,15 +19,15 @@ This roadmap is ordered by dependency and delivery value. Finish each milestone 
 
 These tasks establish all board data needed by later gameplay UI.
 
-- [ ] Render number tokens on every productive hex.
-- [ ] Visually emphasize number tokens 6 and 8.
-- [ ] Generate number tokens with the intended distribution.
-- [ ] Prevent 6 and 8 tokens from being adjacent.
-- [ ] Add port locations to the generated topology.
-- [ ] Generate generic 3:1 and resource-specific 2:1 ports.
-- [ ] Render ports and their trade ratios.
-- [ ] Render the robber from `game.board.robberTileId` instead of the original desert flag.
-- [ ] Add board-generation tests for terrain counts, number counts, 6/8 adjacency, desert, ports, and topology validity.
+- [x] Render number tokens on every productive hex.
+- [x] Visually emphasize number tokens 6 and 8.
+- [x] Generate number tokens with the intended distribution.
+- [x] Prevent 6 and 8 tokens from being adjacent.
+- [x] Add port locations to the generated topology.
+- [x] Generate generic 3:1 and resource-specific 2:1 ports.
+- [x] Render ports and their trade ratios.
+- [x] Render the robber from `game.board.robberTileId` instead of the original desert flag.
+- [x] Add board-generation tests for terrain counts, number counts, 6/8 adjacency, desert, ports, and topology validity.
 
 ### Done when
 

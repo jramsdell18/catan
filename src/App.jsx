@@ -3,7 +3,7 @@ import CatanScene from './components/CatanScene.jsx';
 import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
 import { createPlayerInventories, getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
-import { createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
+import { createBoardPorts, createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
 import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
 import JitsiOverlay from './stream/JitsiOverlay.jsx';
@@ -26,6 +26,7 @@ function App() {
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
   const topology = useMemo(() => createBoardTopology(board.hexes), [board.hexes]);
+  const ports = useMemo(() => createBoardPorts(topology, board.seed), [board.seed, topology]);
   const placements = useMemo(() => placementsFromGame(game), [game]);
   const resourceHands = useMemo(() => resourceHandsFromGame(game, activePlayers), [activePlayers, game]);
   const playerInventories = useMemo(
@@ -106,7 +107,7 @@ function App() {
 
   function handleStartGame() {
     const players = getActivePlayers(confirmedPlayers ?? selectedPlayers);
-    const rulesBoard = createRulesBoard(board, topology);
+    const rulesBoard = createRulesBoard(board, topology, ports);
     setGame(createGame({
       board: rulesBoard,
       players: players.map((player) => ({ ...player, name: player.label })),
@@ -307,6 +308,8 @@ function App() {
           playerInventories={playerInventories}
           cameraResetKey={cameraResetKey}
           topology={topology}
+          ports={game?.board.ports ?? ports}
+          robberTileId={game?.board.robberTileId ?? board.hexes.find((hex) => hex.hasRobber)?.hexId}
           placements={placements}
           placementOptions={placementOptions}
           onPlaceSettlement={handlePlaceSettlement}

@@ -373,3 +373,36 @@ export function createRobberMesh() {
 
   return group;
 }
+
+export function createPortMesh(port) {
+  const group = new THREE.Group();
+  const label = port.resource ? `2:1\n${port.resource}` : '3:1';
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 160;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#f5ead0';
+  context.beginPath();
+  context.roundRect(8, 8, 240, 144, 28);
+  context.fill();
+  context.strokeStyle = '#7a4b2a';
+  context.lineWidth = 8;
+  context.stroke();
+  context.fillStyle = '#1c1712';
+  context.font = '800 48px Arial';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  const lines = label.split('\n');
+  lines.forEach((line, index) => context.fillText(line.toUpperCase(), 128, lines.length === 1 ? 80 : 57 + index * 52));
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const marker = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.05, 0.66),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide }),
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.y = 0.02;
+  group.add(marker);
+  return group;
+}

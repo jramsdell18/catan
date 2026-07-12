@@ -7,6 +7,7 @@ import {
   createCityMesh,
   createDiceMesh,
   createHexTileMesh,
+  createPortMesh,
   createResourceCardMesh,
   createRoadHighlightMesh,
   createRoadMesh,
@@ -36,18 +37,39 @@ function disposeScene(scene) {
   });
 }
 
-function addTerrain(world, board) {
+function addTerrain(world, board, robberTileId) {
   board.hexes.forEach((hex) => {
     const tile = createHexTileMesh(hex);
     tile.position.set(hex.world.x, 0, hex.world.z);
     world.add(tile);
 
-    if (hex.hasRobber) {
+    if (hex.hexId === robberTileId) {
       const robber = createRobberMesh();
       robber.position.set(hex.world.x, 0.18, hex.world.z);
       world.add(robber);
     }
   });
+}
+
+function addPorts(world, ports, topology) {
+  const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]));
+  const portGroup = new THREE.Group();
+  portGroup.name = 'ports';
+
+  ports.forEach((port) => {
+    const [a, b] = port.intersections.map((id) => verticesById.get(id));
+    if (!a || !b) return;
+    const edgeX = (a.x + b.x) / 2;
+    const edgeZ = (a.z + b.z) / 2;
+    const distance = Math.hypot(edgeX, edgeZ) || 1;
+    const marker = createPortMesh(port);
+    marker.name = `${port.id}-${port.resource ?? 'generic'}`;
+    marker.position.set(edgeX + (edgeX / distance) * 0.7, 0.12, edgeZ + (edgeZ / distance) * 0.7);
+    marker.rotation.y = -Math.atan2(edgeZ, edgeX) + Math.PI / 2;
+    portGroup.add(marker);
+  });
+
+  world.add(portGroup);
 }
 
 function getPlayerColor(activePlayers, playerId) {
@@ -300,6 +322,8 @@ function CatanScene({
   playerInventories,
   cameraResetKey,
   topology,
+  ports,
+  robberTileId,
   placements,
   placementOptions,
   onPlaceSettlement,
@@ -392,7 +416,8 @@ function CatanScene({
     boardTable.receiveShadow = true;
     world.add(boardTable);
 
-    addTerrain(world, board);
+    addTerrain(world, board, robberTileId);
+    addPorts(world, ports, topology);
     addPlacedPieces(world, activePlayers, topology, placements);
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
@@ -401,6 +426,9 @@ function CatanScene({
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
+      numberTokens: board.hexes.filter((hex) => hex.number !== null).length,
+      ports: ports.length,
+      robberTileId,
       players: activePlayers.length,
       dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
@@ -525,7 +553,9 @@ function CatanScene({
     placementOptions,
     placements,
     playerInventories,
+    ports,
     resourceHands,
+    robberTileId,
     topology,
   ]);
 

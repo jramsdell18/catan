@@ -1,6 +1,45 @@
 import { createBoard } from '../rules/index.js';
 
-export function createRulesBoard(board, topology) {
+const PORT_TYPES = [null, null, null, null, 'wood', 'brick', 'ore', 'hay', 'sheep'];
+
+function seededShuffle(items, seed) {
+  const result = [...items];
+  let state = Number(seed) || 1;
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    state = (Math.imul(state ^ (state >>> 15), 1 | state) + 0x6d2b79f5) | 0;
+    const swapIndex = (state >>> 0) % (index + 1);
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+export function createBoardPorts(topology, seed = 1) {
+  const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]));
+  const boundaryEdges = topology.edges
+    .filter((edge) => {
+      const [a, b] = edge.vertexIds.map((id) => verticesById.get(id));
+      const bHexIds = new Set(b.adjacentHexes.map((hex) => hex.hexId));
+      return a.adjacentHexes.filter((hex) => bHexIds.has(hex.hexId)).length === 1;
+    })
+    .sort((edgeA, edgeB) => Math.atan2(edgeA.z, edgeA.x) - Math.atan2(edgeB.z, edgeB.x));
+
+  const offset = (Number(seed) >>> 0) % boundaryEdges.length;
+  const portTypes = seededShuffle(PORT_TYPES, seed);
+
+  return portTypes.map((resource, index) => {
+    const boundaryIndex = (offset + Math.floor((index * boundaryEdges.length) / portTypes.length)) % boundaryEdges.length;
+    const edge = boundaryEdges[boundaryIndex];
+    return {
+      id: `port-${index + 1}`,
+      edgeId: edge.id,
+      intersections: [...edge.vertexIds],
+      ratio: resource ? 2 : 3,
+      resource,
+    };
+  });
+}
+
+export function createRulesBoard(board, topology, ports = createBoardPorts(topology, board.seed)) {
   const tiles = board.hexes.map((hex) => ({
     id: hex.hexId,
     terrain: hex.terrainId,
@@ -14,7 +53,7 @@ export function createRulesBoard(board, topology) {
     tiles,
     intersections: topology.vertices.map((vertex) => ({ id: vertex.id })),
     edges: topology.edges.map((edge) => ({ id: edge.id, intersections: edge.vertexIds })),
-    ports: [],
+    ports,
     robberTileId: board.hexes.find((hex) => hex.hasRobber)?.hexId,
   });
 }

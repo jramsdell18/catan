@@ -43,6 +43,9 @@ export function validateBoard(board) {
     if (!Array.isArray(port.intersections) || port.intersections.length !== 2) {
       throw new Error('A port must touch two intersections.');
     }
+    if (port.intersections.some((id) => !board.intersections[id])) {
+      throw new Error('A port references a missing intersection.');
+    }
     if (port.resource !== null && !RESOURCE_TYPES.includes(port.resource)) throw new Error('Invalid port resource.');
   }
   return true;
@@ -98,4 +101,3 @@ export function getPlayerPortRatio(board, playerId, resource) {
 export function cloneBoard(board) {
   return structuredClone(board);
 }
-
