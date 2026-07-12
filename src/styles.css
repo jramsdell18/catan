@@ -1,0 +1,225 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #17211d;
+  background: #f6f3ea;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100dvh;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #ffffff;
+  background: #1f6f78;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #185860;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #d9a441;
+  outline-offset: 3px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100dvh;
+  padding:
+    max(1rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+  gap: 1rem;
+}
+
+.setup-section,
+.game-space {
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.setup-section {
+  display: grid;
+  align-content: center;
+  gap: 1.5rem;
+  padding: 1.25rem;
+}
+
+.setup-copy {
+  max-width: 36rem;
+}
+
+.eyebrow,
+.status-label {
+  margin: 0 0 0.5rem;
+  color: #8a4d2a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.intro {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  color: #43534c;
+  line-height: 1.6;
+}
+
+.setup-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 32rem;
+}
+
+.setup-form label {
+  font-weight: 800;
+}
+
+.player-control {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(23, 33, 29, 0.22);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  color: #17211d;
+  background: #ffffff;
+}
+
+.helper-text {
+  margin: 0;
+  color: #5c6862;
+  line-height: 1.45;
+}
+
+.game-space {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1.5rem;
+  overflow: hidden;
+  padding: 1.25rem;
+  background:
+    linear-gradient(rgba(31, 111, 120, 0.08), rgba(31, 111, 120, 0.08)),
+    #f8f7f1;
+}
+
+.board-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(54px, 78px));
+  gap: 0.45rem;
+  justify-content: center;
+  width: min(100%, 17rem);
+}
+
+.hex-tile {
+  display: block;
+  aspect-ratio: 1;
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%);
+  border: 2px solid rgba(23, 33, 29, 0.18);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.forest {
+  background: #2f7d4f;
+}
+
+.field {
+  background: #e4bd4f;
+}
+
+.hill {
+  background: #b85c38;
+}
+
+.mountain {
+  background: #78817f;
+}
+
+.pasture {
+  background: #82a957;
+}
+
+.desert {
+  background: #d7a86b;
+}
+
+.status-panel {
+  width: min(100%, 26rem);
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  padding: 1rem;
+  background: #ffffff;
+}
+
+.status-message {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+@media (min-width: 520px) {
+  .player-control {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+  }
+}
+
+@media (min-width: 860px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.85fr);
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .setup-section,
+  .game-space {
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 3rem;
+  }
+}
