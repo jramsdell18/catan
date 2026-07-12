@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import { createRandomBoard } from './game/board.js';
-import { createPlayerInventories, getActivePlayers } from './game/pieces.js';
-import { createBoardPorts, createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
+import { getActivePlayers } from './game/pieces.js';
+import {
+  actionForTarget,
+  describeAction,
+  describeLogEntry,
+  getInteractionMode,
+  getLegalTargets,
+  INTERACTION_LABELS,
+  INTERACTION_MODES,
+} from './game/interactions.js';
+import {
+  createBoardPorts,
+  createRulesBoard,
+  placementsFromGame,
+  playerInventoriesFromGame,
+  resourceHandsFromGame,
+} from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
-import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
+import { applyAction, createGame } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
@@ -22,6 +37,8 @@ function App() {
   const [game, setGame] = useState(null);
   const [gameError, setGameError] = useState('');
   const [diceRoll, setDiceRoll] = useState(null);
+  const [requestedMode, setRequestedMode] = useState(null);
+  const [actionFeedback, setActionFeedback] = useState({ status: 'idle', message: '' });
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -30,12 +47,13 @@ function App() {
   const placements = useMemo(() => placementsFromGame(game), [game]);
   const resourceHands = useMemo(() => resourceHandsFromGame(game, activePlayers), [activePlayers, game]);
   const playerInventories = useMemo(
-    () => createPlayerInventories(activePlayers, placements),
-    [activePlayers, placements],
+    () => playerInventoriesFromGame(game, activePlayers),
+    [activePlayers, game],
   );
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
   const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
+  const interactionMode = getInteractionMode(game, requestedMode);
 
   const playerMessage = useMemo(() => {
     if (!confirmedPlayers) return 'Choose a player count to start the room setup.';
@@ -51,38 +69,43 @@ function App() {
     return 'Game started.';
   }, [confirmedPlayers, currentPlayer, game]);
 
-  const placementOptions = useMemo(() => {
-    if (!game || game.phase !== 'setup') {
-      return { settlements: [], roads: [] };
-    }
-    if (!game.setupSettlementId) {
-      return {
-        settlements: topology.vertices.filter((vertex) =>
-          canPlaceSettlement(game.board, vertex.id, game.currentPlayerId, false),
-        ),
-        roads: [],
-      };
-    }
-    return {
-      settlements: [],
-      roads: topology.edges.filter((edge) =>
-        canPlaceRoad(game.board, edge.id, game.currentPlayerId, game.setupSettlementId),
-      ),
-    };
-  }, [game, topology]);
+  const legalTargets = useMemo(
+    () => getLegalTargets(game, topology, board, interactionMode),
+    [board, game, interactionMode, topology],
+  );
+  const placementOptions = useMemo(
+    () => ({
+      settlements: legalTargets.intersections,
+      roads: legalTargets.edges,
+    }),
+    [legalTargets],
+  );
 
   const dispatch = useCallback((action) => {
+    setActionFeedback({ status: 'pending', message: `Applying: ${describeAction(action.type)}…` });
     setGame((current) => {
-      if (!current) return current;
+      if (!current) {
+        setActionFeedback({ status: 'error', message: 'Start a game before choosing an action.' });
+        return current;
+      }
       try {
         const next = applyAction(current, action);
         setGameError('');
+        setActionFeedback({ status: 'success', message: `Success: ${describeAction(action.type)}.` });
+        setRequestedMode(null);
         return next;
       } catch (error) {
         setGameError(error.message);
+        setActionFeedback({ status: 'error', message: error.message });
         return current;
       }
     });
+  }, []);
+
+  const cancelInteraction = useCallback(() => {
+    setRequestedMode(null);
+    setGameError('');
+    setActionFeedback({ status: 'idle', message: 'Action cancelled.' });
   }, []);
 
   function handleConfirm(event) {
@@ -91,6 +114,8 @@ function App() {
     setGame(null);
     setGameError('');
     setDiceRoll(null);
+    setRequestedMode(null);
+    setActionFeedback({ status: 'idle', message: '' });
   }
 
   function handleResetCamera() {
@@ -104,12 +129,16 @@ function App() {
 
     const players = getActivePlayers(confirmedPlayers);
     const rulesBoard = createRulesBoard(board, topology, ports);
-    setGame(createGame({
-      board: rulesBoard,
-      players: players.map((player) => ({ ...player, name: player.label })),
-    }));
+    setGame(
+      createGame({
+        board: rulesBoard,
+        players: players.map((player) => ({ ...player, name: player.label })),
+      }),
+    );
     setGameError('');
     setDiceRoll(null);
+    setRequestedMode(null);
+    setActionFeedback({ status: 'idle', message: 'Game started.' });
   }
 
   function handleRollDice() {
@@ -125,23 +154,20 @@ function App() {
     dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
-  const handlePlaceSettlement = useCallback(
-    (vertexId) => {
-      if (game?.phase === 'setup' && !game.setupSettlementId) {
-        dispatch({ type: 'placeSettlement', playerId: game.currentPlayerId, intersectionId: vertexId });
-      }
+  const handleSelectTarget = useCallback(
+    (targetId) => {
+      if (!game || !interactionMode) return;
+      const action = actionForTarget(interactionMode, game, targetId);
+      if (action) dispatch(action);
     },
-    [dispatch, game],
+    [dispatch, game, interactionMode],
   );
 
-  const handlePlaceRoad = useCallback(
-    (edgeId) => {
-      if (game?.phase === 'setup' && game.setupSettlementId) {
-        dispatch({ type: 'placeRoad', playerId: game.currentPlayerId, edgeId });
-      }
-    },
-    [dispatch, game],
+  const handlePlaceSettlement = useCallback(
+    (vertexId) => handleSelectTarget(vertexId),
+    [handleSelectTarget],
   );
+  const handlePlaceRoad = useCallback((edgeId) => handleSelectTarget(edgeId), [handleSelectTarget]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -157,18 +183,23 @@ function App() {
         setupSettlementId: game?.setupSettlementId ?? null,
         settlementOptions: placementOptions.settlements.map((vertex) => vertex.id),
         roadOptions: placementOptions.roads.map((edge) => edge.id),
+        hexOptions: legalTargets.hexes.map((hex) => hex.hexId),
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
         dice: game?.dice ?? null,
         error: gameError || null,
+        interactionMode,
+        feedback: { ...actionFeedback },
+        logLength: game?.log.length ?? 0,
         resources: game
-          ? Object.fromEntries(
-              game.players.map((player) => [player.id, { ...player.resources }]),
-            )
+          ? Object.fromEntries(game.players.map((player) => [player.id, { ...player.resources }]))
           : null,
       }),
       placeSettlement: handlePlaceSettlement,
       placeRoad: handlePlaceRoad,
+      beginInteraction: setRequestedMode,
+      cancelInteraction,
+      selectTarget: handleSelectTarget,
       rollDice: (dice) => {
         if (game?.phase !== 'roll') {
           return;
@@ -186,18 +217,25 @@ function App() {
       delete window.__CATAN_TEST_API;
     };
   }, [
+    actionFeedback,
     board.seed,
+    cancelInteraction,
     confirmedPlayers,
     dispatch,
     game,
     gameError,
     handlePlaceRoad,
     handlePlaceSettlement,
+    handleSelectTarget,
+    interactionMode,
+    legalTargets.hexes,
     placementOptions.roads,
     placementOptions.settlements,
     placements.roads.length,
     placements.settlements.length,
   ]);
+
+  const actionPhase = game?.phase === 'action';
 
   return (
     <main className="app-shell">
@@ -212,9 +250,9 @@ function App() {
           ports={game?.board.ports ?? ports}
           robberTileId={game?.board.robberTileId ?? board.hexes.find((hex) => hex.hasRobber)?.hexId}
           placements={placements}
-          placementOptions={placementOptions}
-          onPlaceSettlement={handlePlaceSettlement}
-          onPlaceRoad={handlePlaceRoad}
+          legalTargets={legalTargets}
+          interactionMode={interactionMode}
+          onSelectTarget={handleSelectTarget}
           diceRoll={diceRoll}
         />
         <LiveKitTableCall players={activePlayers} />
@@ -240,7 +278,12 @@ function App() {
               <button type="submit" className="secondary-button" data-testid="set-players">
                 Set Players
               </button>
-              <button type="button" data-testid="start-game" onClick={handleStartGame} disabled={!confirmedPlayers}>
+              <button
+                type="button"
+                data-testid="start-game"
+                onClick={handleStartGame}
+                disabled={!confirmedPlayers}
+              >
                 Start Game
               </button>
             </form>
@@ -275,6 +318,32 @@ function App() {
               {gameError}
             </p>
           )}
+          {interactionMode && (
+            <div className="interaction-status" data-testid="interaction-status">
+              <strong>Board action</strong>
+              <span>{INTERACTION_LABELS[interactionMode]}</span>
+              {requestedMode && (
+                <button
+                  type="button"
+                  className="secondary-button compact-button"
+                  onClick={cancelInteraction}
+                  data-testid="cancel-interaction"
+                >
+                  Cancel action
+                </button>
+              )}
+            </div>
+          )}
+          {actionFeedback.message && (
+            <p
+              className={`action-feedback ${actionFeedback.status}`}
+              aria-live="polite"
+              data-testid="action-feedback"
+              data-status={actionFeedback.status}
+            >
+              {actionFeedback.message}
+            </p>
+          )}
         </div>
 
         <div className="control-actions">
@@ -289,13 +358,41 @@ function App() {
           >
             End Turn
           </button>
+          {actionPhase && (
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="build-road"
+                onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_ROAD)}
+              >
+                Build Road
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="build-settlement"
+                onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_SETTLEMENT)}
+              >
+                Build Settlement
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="build-city"
+                onClick={() => setRequestedMode(INTERACTION_MODES.BUILD_CITY)}
+              >
+                Build City
+              </button>
+            </>
+          )}
           <button type="button" className="secondary-button" data-testid="reset-camera" onClick={handleResetCamera}>
             Reset Camera
           </button>
           <button
             type="button"
             className="secondary-button"
-            data-testid={game ? 'start-game' : 'start-game-bottom'}
+            data-testid={game ? 'restart-game' : 'start-game-bottom'}
             onClick={handleStartGame}
             disabled={!confirmedPlayers}
           >
@@ -346,6 +443,24 @@ function App() {
               </div>
             ))}
           </div>
+        )}
+
+        {game?.log.length > 0 && (
+          <section className="history-panel" aria-labelledby="history-title" data-testid="action-history">
+            <p className="status-label" id="history-title">
+              Recent actions
+            </p>
+            <ol>
+              {[...game.log]
+                .reverse()
+                .slice(0, 8)
+                .map((entry, index) => (
+                  <li key={`${game.log.length - index}-${entry.type}`}>
+                    {describeLogEntry(entry, game.players)}
+                  </li>
+                ))}
+            </ol>
+          </section>
         )}
       </section>
     </main>

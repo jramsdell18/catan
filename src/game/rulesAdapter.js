@@ -94,3 +94,15 @@ export function resourceHandsFromGame(game, players) {
       : [],
   }));
 }
+
+export function playerInventoriesFromGame(game, players) {
+  return players.map((player) => {
+    const pieces = game?.players.find((item) => item.id === player.id)?.pieces;
+    return {
+      playerId: player.id,
+      road: pieces?.roads ?? 15,
+      settlement: pieces?.settlements ?? 5,
+      city: pieces?.cities ?? 4,
+    };
+  });
+}

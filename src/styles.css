@@ -234,6 +234,60 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.interaction-status {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(23, 33, 29, 0.12);
+  padding-top: 0.85rem;
+  color: #43534c;
+}
+
+.compact-button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 0.45rem 0.7rem;
+}
+
+.action-feedback {
+  margin: 0.75rem 0 0;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  font-weight: 700;
+}
+
+.action-feedback.pending {
+  color: #5d4813;
+  background: #fff3c9;
+}
+
+.action-feedback.success {
+  color: #155b38;
+  background: #dff5e9;
+}
+
+.action-feedback.error {
+  color: #8c211e;
+  background: #fde5e3;
+}
+
+.history-panel {
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.76);
+  min-width: 0;
+}
+
+.history-panel ol {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #43534c;
+  font-size: 0.88rem;
+}
+
 .table-video-layer {
   position: absolute;
   inset: 0;

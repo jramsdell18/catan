@@ -35,14 +35,34 @@ A randomized board contains every piece of data required by the rules engine, pa
 
 ## Milestone 2: Generalize UI-to-engine actions
 
-These tasks prevent each new feature from inventing a separate interaction pattern.
+### High-level goal
 
-- [ ] Add a reusable action dispatcher with pending, success, and error feedback.
-- [ ] Introduce UI interaction modes such as `placeRoad`, `placeSettlement`, `buildCity`, and `moveRobber`.
-- [ ] Add a consistent cancel action for board-selection modes.
-- [ ] Derive all roads, settlements, cities, robber state, resources, pieces, and phase prompts from engine state.
-- [ ] Add reusable legal-target highlights for intersections, edges, and hexes.
-- [ ] Add an action/event history panel based on the engine log.
+Create one reliable interaction system between the player, the 3D board, and the rules engine. When a player chooses an action, the UI enters a clear mode, shows only legal targets, sends the resulting command to the engine, and renders the authoritative state returned by the engine.
+
+This milestone is primarily architecture and user-experience groundwork rather than a large set of new Catan rules. It replaces feature-specific click handling with reusable patterns that later milestones can use for building roads, placing settlements, upgrading cities, moving the robber, selecting victims, and resolving development cards.
+
+### What this unlocks for players
+
+- Every board action follows the same understandable flow: choose an action, see legal targets, select a target, and receive clear confirmation or an error.
+- Players can cancel an unfinished board action without accidentally changing game state.
+- The pieces, resources, robber, and prompts shown on screen consistently match the rules engine.
+- Players receive visible feedback about what happened instead of having to infer it from the board.
+- The action history makes turns easier to follow and provides a foundation for debugging, replays, and multiplayer synchronization.
+
+### Impact on completing a full game
+
+Milestone 2 does not by itself make every Catan action playable. It creates the shared interaction pipeline required by Milestones 3–7. Without it, building, robber movement, trading, development cards, and scoring would each need separate UI logic and could drift away from the authoritative rules.
+
+After this milestone, new gameplay features become smaller integrations: define the available command, derive its legal targets, and render the engine result. Completing it lowers the risk of illegal client-side actions and makes it practical to add the remaining full-game workflows consistently.
+
+### Implementation tasks
+
+- [x] Add a reusable action dispatcher with pending, success, and error feedback.
+- [x] Introduce UI interaction modes such as `placeRoad`, `placeSettlement`, `buildCity`, and `moveRobber`.
+- [x] Add a consistent cancel action for board-selection modes.
+- [x] Derive all roads, settlements, cities, robber state, resources, pieces, and phase prompts from engine state.
+- [x] Add reusable legal-target highlights for intersections, edges, and hexes.
+- [x] Add an action/event history panel based on the engine log.
 
 ### Done when
 

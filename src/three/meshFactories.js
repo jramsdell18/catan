@@ -287,6 +287,20 @@ export function createRoadHighlightMesh(length, color = '#f7dc6f') {
   return mesh;
 }
 
+export function createHexHighlightMesh(color = '#f7dc6f') {
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.38,
+    transparent: true,
+    opacity: 0.36,
+    roughness: 0.4,
+  });
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.84, 0.84, 0.05, 6), material);
+  mesh.rotation.y = HEX_TILE_CORNER_START;
+  return mesh;
+}
+
 export function createCityMesh(color) {
   const group = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.34, 0.38), makeMaterial(color));

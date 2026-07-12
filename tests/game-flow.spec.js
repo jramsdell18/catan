@@ -28,7 +28,8 @@ async function confirmPlayers(page, count = 3) {
 async function startGame(page) {
   await page.getByTestId('start-game').click();
   await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
-  await expect(page.getByTestId('start-game')).toHaveText('Restart Game');
+  // Overlay hides after start; restart lives on the bottom control panel.
+  await expect(page.getByTestId('restart-game')).toHaveText('Restart Game');
 }
 
 /**
@@ -56,6 +57,8 @@ async function completeSetup(page) {
       .not.toBeNull();
 
     const mid = await getTestState(page);
+    expect(mid.interactionMode).toBe('placeRoad');
+    expect(mid.feedback.status).toBe('success');
     expect(mid.roadOptions.length, `step ${step} needs road options`).toBeGreaterThan(0);
 
     await page.evaluate((edgeId) => {
@@ -121,6 +124,7 @@ test.describe('setup snake through production turn', () => {
     expect(afterSetup.settlementCount).toBe(6);
     expect(afterSetup.roadCount).toBe(6);
     expect(afterSetup.currentPlayerId).toBe('red');
+    expect(afterSetup.logLength).toBe(12);
 
     // Flat starting grant: one of each resource per player
     for (const playerId of Object.keys(afterSetup.resources)) {
@@ -134,6 +138,7 @@ test.describe('setup snake through production turn', () => {
     }
 
     await expect(page.getByTestId('cards-in-play')).toHaveText('15');
+    await expect(page.getByTestId('action-history')).toBeVisible();
     await expect(page.getByTestId('status-message')).toContainText('rolls the dice');
     await expect(page.getByTestId('roll-dice')).toBeEnabled();
     await expect(page.getByTestId('end-turn')).toBeDisabled();
@@ -149,7 +154,16 @@ test.describe('setup snake through production turn', () => {
 
     const afterRoll = await getTestState(page);
     expect(afterRoll.dice).toEqual([2, 3]);
+    expect(afterRoll.logLength).toBe(13);
+    expect(afterRoll.feedback.status).toBe('success');
     await expect(page.getByTestId('last-roll')).toContainText('2 + 3 = 5');
+
+    await page.evaluate(() => window.__CATAN_TEST_API.beginInteraction('placeRoad'));
+    await expect(page.getByTestId('cancel-interaction')).toBeVisible();
+    expect((await getTestState(page)).interactionMode).toBe('placeRoad');
+    await page.getByTestId('cancel-interaction').click();
+    await expect(page.getByTestId('cancel-interaction')).toBeHidden();
+    expect((await getTestState(page)).interactionMode).toBeNull();
 
     await expect(page.getByTestId('end-turn')).toBeEnabled();
     await page.getByTestId('end-turn').click();
@@ -165,6 +179,7 @@ test.describe('setup snake through production turn', () => {
   test('restart game resets to a fresh setup phase', async ({ page }) => {
     await page.goto('/');
     await waitForTestApi(page);
+    await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
 
     await confirmPlayers(page, 3);
     await startGame(page);
@@ -177,7 +192,7 @@ test.describe('setup snake through production turn', () => {
       .poll(async () => (await getTestState(page)).settlementCount)
       .toBe(1);
 
-    await page.getByTestId('start-game').click();
+    await page.getByTestId('restart-game').click();
     await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
 
     const restarted = await getTestState(page);

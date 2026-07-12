@@ -6,6 +6,7 @@ import woodTextureUrl from '../assets/wood.jpg';
 import {
   createCityMesh,
   createDiceMesh,
+  createHexHighlightMesh,
   createHexTileMesh,
   createPortMesh,
   createResourceCardMesh,
@@ -92,6 +93,14 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
     placedGroup.add(piece);
   });
 
+  placements.cities.forEach((city) => {
+    const vertex = topology.vertices.find((item) => item.id === city.vertexId);
+    if (!vertex) return;
+    const piece = createCityMesh(getPlayerColor(activePlayers, city.playerId));
+    piece.position.set(vertex.x, 0.11, vertex.z);
+    placedGroup.add(piece);
+  });
+
   placements.roads.forEach((roadPlacement) => {
     const edge = topology.edges.find((item) => item.id === roadPlacement.edgeId);
 
@@ -108,26 +117,36 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
   world.add(placedGroup);
 }
 
-function addPlacementHighlights(world, placementOptions, interactionTargets) {
+function addBoardHighlights(world, legalTargets, interactionMode, interactionTargets) {
   const highlights = new THREE.Group();
   highlights.name = 'placement-highlights';
 
-  placementOptions.settlements.forEach((vertex) => {
+  legalTargets.intersections.forEach((vertex) => {
     const highlight = createSettlementHighlightMesh();
     highlight.position.set(vertex.x, 0.28, vertex.z);
-    highlight.userData = { placementType: 'settlement', id: vertex.id };
+    highlight.userData = { targetType: 'intersection', id: vertex.id };
     interactionTargets.push(highlight);
     highlights.add(highlight);
   });
 
-  placementOptions.roads.forEach((edge) => {
+  legalTargets.edges.forEach((edge) => {
     const highlight = createRoadHighlightMesh(edge.length);
     highlight.position.set(edge.x, 0.3, edge.z);
     highlight.rotation.y = edge.rotation;
-    highlight.userData = { placementType: 'road', id: edge.id };
+    highlight.userData = { targetType: 'edge', id: edge.id };
     interactionTargets.push(highlight);
     highlights.add(highlight);
   });
+
+  legalTargets.hexes.forEach((hex) => {
+    const highlight = createHexHighlightMesh();
+    highlight.position.set(hex.world.x, 0.28, hex.world.z);
+    highlight.userData = { targetType: 'hex', id: hex.hexId };
+    interactionTargets.push(highlight);
+    highlights.add(highlight);
+  });
+
+  highlights.userData.interactionMode = interactionMode;
 
   world.add(highlights);
 }
@@ -325,9 +344,9 @@ function CatanScene({
   ports,
   robberTileId,
   placements,
-  placementOptions,
-  onPlaceSettlement,
-  onPlaceRoad,
+  legalTargets,
+  interactionMode,
+  onSelectTarget,
   diceRoll,
 }) {
   const containerRef = useRef(null);
@@ -467,7 +486,7 @@ function CatanScene({
     addTerrain(world, board, robberTileId);
     addPorts(world, ports, topology);
     addPlacedPieces(world, activePlayers, topology, placements);
-    addPlacementHighlights(world, placementOptions, interactionTargets);
+    addBoardHighlights(world, legalTargets, interactionMode, interactionTargets);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     addDiceArea(world, diceRoll, animatedDice);
@@ -526,19 +545,12 @@ function CatanScene({
 
       raycaster.setFromCamera(pointer, camera);
       const [hit] = raycaster.intersectObjects(interactionTargets, true);
-      const placement = hit?.object?.userData;
+      const target = hit?.object?.userData;
 
-      if (!placement) {
+      if (!target?.id) {
         return;
       }
-
-      if (placement.placementType === 'settlement') {
-        onPlaceSettlement(placement.id);
-      }
-
-      if (placement.placementType === 'road') {
-        onPlaceRoad(placement.id);
-      }
+      onSelectTarget(target.id, target.targetType);
     }
 
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
@@ -616,9 +628,9 @@ function CatanScene({
     board,
     cameraResetKey,
     diceRoll,
-    onPlaceRoad,
-    onPlaceSettlement,
-    placementOptions,
+    interactionMode,
+    legalTargets,
+    onSelectTarget,
     placements,
     playerInventories,
     ports,
