@@ -20,6 +20,7 @@ body {
 }
 
 button,
+input,
 select {
   font: inherit;
 }
@@ -53,6 +54,7 @@ button:disabled {
 }
 
 button:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: 3px solid #d9a441;
   outline-offset: 3px;
@@ -128,6 +130,16 @@ h1 {
 }
 
 select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(23, 33, 29, 0.22);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  color: #17211d;
+  background: #ffffff;
+}
+
+input {
   width: 100%;
   min-height: 44px;
   border: 1px solid rgba(23, 33, 29, 0.22);
@@ -265,6 +277,67 @@ select {
   overflow-wrap: anywhere;
 }
 
+.video-call-panel {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.video-call-panel-active {
+  padding: 0;
+  background: #17211d;
+}
+
+.video-join-card {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.video-join-card h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.video-join-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.video-name-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.video-name-field label {
+  font-weight: 800;
+}
+
+.video-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #17211d;
+}
+
+.video-frame iframe {
+  display: block;
+}
+
+.call-status {
+  min-height: 1.3rem;
+  margin: 0;
+  color: #43534c;
+  line-height: 1.35;
+}
+
 @media (min-width: 520px) {
   .player-control {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -287,6 +360,16 @@ select {
     padding: 1.5rem;
   }
 
+  .setup-section {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .game-space {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .setup-section,
   .game-space {
     padding: 2rem;
@@ -296,4 +379,15 @@ select {
     font-size: 3rem;
   }
 
+  .video-call-panel {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+}
+
+@media (max-width: 760px) {
+  .video-join-card {
+    padding: 1.25rem;
+  }
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { TERRAIN_TYPES } from '../game/terrain.js';
 
 const HEX_HEIGHT = 0.22;
@@ -100,6 +101,86 @@ function createNumberTokenMesh(number) {
   group.add(tokenFace);
 
   return group;
+}
+
+const DICE_FACE_PIPS = {
+  1: [[0, 0]],
+  2: [
+    [-1, -1],
+    [1, 1],
+  ],
+  3: [
+    [-1, -1],
+    [0, 0],
+    [1, 1],
+  ],
+  4: [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ],
+  5: [
+    [-1, -1],
+    [1, -1],
+    [0, 0],
+    [-1, 1],
+    [1, 1],
+  ],
+  6: [
+    [-1, -1.2],
+    [1, -1.2],
+    [-1, 0],
+    [1, 0],
+    [-1, 1.2],
+    [1, 1.2],
+  ],
+};
+
+const DICE_FACES = [
+  { value: 3, normal: 'x+', axes: ['z', 'y'] },
+  { value: 4, normal: 'x-', axes: ['z', 'y'] },
+  { value: 1, normal: 'y+', axes: ['x', 'z'] },
+  { value: 6, normal: 'y-', axes: ['x', 'z'] },
+  { value: 2, normal: 'z+', axes: ['x', 'y'] },
+  { value: 5, normal: 'z-', axes: ['x', 'y'] },
+];
+
+function setPipRotation(pip, normal) {
+  if (normal.startsWith('x')) {
+    pip.rotation.z = Math.PI / 2;
+    return;
+  }
+
+  if (normal.startsWith('z')) {
+    pip.rotation.x = Math.PI / 2;
+  }
+}
+
+function setPipPosition(pip, normal, axes, offsetA, offsetB, faceOffset) {
+  const position = { x: 0, y: 0, z: 0 };
+  const normalAxis = normal[0];
+  const sign = normal[1] === '+' ? 1 : -1;
+
+  position[normalAxis] = sign * faceOffset;
+  position[axes[0]] = offsetA;
+  position[axes[1]] = offsetB;
+  pip.position.set(position.x, position.y, position.z);
+}
+
+function addDicePips(group, pipMaterial, pipGeometry, size) {
+  const faceOffset = size / 2 + 0.006;
+  const pipSpacing = size * 0.22;
+
+  DICE_FACES.forEach((face) => {
+    DICE_FACE_PIPS[face.value].forEach(([gridA, gridB]) => {
+      const pip = new THREE.Mesh(pipGeometry, pipMaterial);
+      setPipRotation(pip, face.normal);
+      setPipPosition(pip, face.normal, face.axes, gridA * pipSpacing, gridB * pipSpacing, faceOffset);
+      pip.castShadow = true;
+      group.add(pip);
+    });
+  });
 }
 
 export function createHexTileMesh(hex, radius = 1) {
@@ -229,6 +310,33 @@ export function createResourceCardMesh() {
   card.receiveShadow = true;
 
   return card;
+}
+
+export function createDiceMesh() {
+  const group = new THREE.Group();
+  const size = 0.52;
+  const body = new THREE.Mesh(
+    new RoundedBoxGeometry(size, size, size, 5, 0.09),
+    new THREE.MeshStandardMaterial({
+      color: '#fbfaf3',
+      roughness: 0.36,
+      metalness: 0.03,
+    }),
+  );
+  const pipMaterial = new THREE.MeshStandardMaterial({
+    color: '#171717',
+    roughness: 0.42,
+    metalness: 0.02,
+  });
+  const pipGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.015, 18);
+
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+  addDicePips(group, pipMaterial, pipGeometry, size);
+  group.scale.setScalar(1.04);
+
+  return group;
 }
 
 export function createRobberMesh() {

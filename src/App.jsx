@@ -6,8 +6,13 @@ import { createPlayerInventories, getActivePlayers, PLAYER_PIECE_TYPES } from '.
 import { createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
 import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
+import JitsiOverlay from './stream/JitsiOverlay.jsx';
 
 const DEFAULT_PLAYER_COUNT = 4;
+
+function rollDie() {
+  return 1 + Math.floor(Math.random() * 6);
+}
 
 function App() {
   const [selectedPlayers, setSelectedPlayers] = useState(DEFAULT_PLAYER_COUNT);
@@ -16,6 +21,7 @@ function App() {
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [game, setGame] = useState(null);
   const [gameError, setGameError] = useState('');
+  const [diceRoll, setDiceRoll] = useState(null);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -27,6 +33,7 @@ function App() {
     [activePlayers, placements],
   );
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
+  const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
 
   const playerMessage = useMemo(() => {
     if (!confirmedPlayers) {
@@ -83,12 +90,14 @@ function App() {
     setConfirmedPlayers(selectedPlayers);
     setGame(null);
     setGameError('');
+    setDiceRoll(null);
   }
 
   function handleRandomizeBoard() {
     setBoard(createRandomBoard());
     setGame(null);
     setGameError('');
+    setDiceRoll(null);
   }
 
   function handleResetCamera() {
@@ -103,6 +112,20 @@ function App() {
       players: players.map((player) => ({ ...player, name: player.label })),
     }));
     setGameError('');
+    setDiceRoll(null);
+  }
+
+  function handleRollDice() {
+    if (game?.phase !== 'roll') {
+      return;
+    }
+
+    const dice = [rollDie(), rollDie()];
+    setDiceRoll((current) => ({
+      values: dice,
+      rollId: (current?.rollId ?? 0) + 1,
+    }));
+    dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
   const handlePlaceSettlement = useCallback(
@@ -154,7 +177,7 @@ function App() {
           </button>
           <button
             type="button"
-            onClick={() => dispatch({ type: 'rollDice', playerId: game.currentPlayerId })}
+            onClick={handleRollDice}
             disabled={game?.phase !== 'roll'}
           >
             Roll Dice
@@ -172,7 +195,7 @@ function App() {
           <p className="status-label">Room setup</p>
           <p className="status-message">{playerMessage}</p>
           {game && <p className="helper-text">Engine phase: {game.phase}</p>}
-          {game?.dice && <p className="helper-text">Last roll: {game.dice.join(' + ')} = {game.dice[0] + game.dice[1]}</p>}
+          {game?.dice && <p className="helper-text">Last roll: {game.dice.join(' + ')} = {diceTotal}</p>}
           {gameError && <p className="game-error" role="alert">{gameError}</p>}
         </div>
 
@@ -209,6 +232,7 @@ function App() {
           placementOptions={placementOptions}
           onPlaceSettlement={handlePlaceSettlement}
           onPlaceRoad={handlePlaceRoad}
+          diceRoll={diceRoll}
         />
 
         <div className="board-debug">
@@ -230,8 +254,16 @@ function App() {
               </p>
             </div>
           )}
+          {game?.dice && (
+            <div>
+              <p className="status-label">Dice total</p>
+              <p className="seed-value">{diceTotal}</p>
+            </div>
+          )}
         </div>
       </section>
+
+      <JitsiOverlay />
     </main>
   );
 }

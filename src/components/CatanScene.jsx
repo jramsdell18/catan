@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   createCityMesh,
+  createDiceMesh,
   createHexTileMesh,
   createResourceCardMesh,
   createRoadHighlightMesh,
@@ -120,6 +121,19 @@ const CARD_AREA_WIDTH = 3.1;
 const CARD_WIDTH = 0.78;
 const CARD_MAX_SPACING = 0.36;
 const PLAYER_TABLE_SURFACE_Y = -0.22;
+const DIE_TABLE_SURFACE_Y = PLAYER_TABLE_SURFACE_Y + 0.33;
+const DICE_SPOTS = [
+  { x: -3.55, z: 6.05 },
+  { x: -2.72, z: 5.8 },
+];
+const DICE_TARGET_ROTATIONS = {
+  1: new THREE.Euler(0, 0, 0),
+  2: new THREE.Euler(-Math.PI / 2, 0, 0),
+  3: new THREE.Euler(0, 0, Math.PI / 2),
+  4: new THREE.Euler(0, 0, -Math.PI / 2),
+  5: new THREE.Euler(Math.PI / 2, 0, 0),
+  6: new THREE.Euler(Math.PI, 0, 0),
+};
 
 function createCardStack(cards) {
   const group = new THREE.Group();
@@ -230,6 +244,53 @@ function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) 
   world.add(rack);
 }
 
+function getDiceValues(diceRoll) {
+  return diceRoll?.values ?? [1, 1];
+}
+
+function addDiceArea(world, diceRoll, animatedDice) {
+  const diceGroup = new THREE.Group();
+  diceGroup.name = 'dice-area';
+
+  getDiceValues(diceRoll).forEach((value, index) => {
+    const spot = DICE_SPOTS[index];
+    const die = createDiceMesh();
+    const targetRotation = DICE_TARGET_ROTATIONS[value] ?? DICE_TARGET_ROTATIONS[1];
+    const targetPosition = new THREE.Vector3(spot.x, DIE_TABLE_SURFACE_Y, spot.z);
+
+    die.position.copy(targetPosition);
+    die.rotation.copy(targetRotation);
+
+    if (diceRoll?.rollId) {
+      const startPosition = new THREE.Vector3(
+        spot.x - 0.35 + index * 0.12,
+        DIE_TABLE_SURFACE_Y + 0.45,
+        spot.z + 0.35 + index * 0.12,
+      );
+      const startRotation = new THREE.Euler(
+        targetRotation.x + Math.PI * (4.5 + index),
+        targetRotation.y + Math.PI * (3.5 + index),
+        targetRotation.z + Math.PI * (5.5 + index),
+      );
+
+      die.position.copy(startPosition);
+      die.rotation.copy(startRotation);
+      animatedDice.push({
+        die,
+        startPosition,
+        targetPosition,
+        startRotation,
+        targetRotation,
+        duration: 1.05 + index * 0.16,
+      });
+    }
+
+    diceGroup.add(die);
+  });
+
+  world.add(diceGroup);
+}
+
 function CatanScene({
   board,
   activePlayers,
@@ -241,6 +302,7 @@ function CatanScene({
   placementOptions,
   onPlaceSettlement,
   onPlaceRoad,
+  diceRoll,
 }) {
   const containerRef = useRef(null);
 
@@ -294,6 +356,7 @@ function CatanScene({
     scene.add(world);
     const interactionTargets = [];
     const animatedHighlights = [];
+    const animatedDice = [];
 
     const playerTable = new THREE.Mesh(
       new THREE.BoxGeometry(19, 0.12, 17),
@@ -317,10 +380,12 @@ function CatanScene({
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
+    addDiceArea(world, diceRoll, animatedDice);
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
       players: activePlayers.length,
+      dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
     };
 
@@ -388,6 +453,19 @@ function CatanScene({
           highlight.material.opacity = 0.62 + Math.sin(elapsed * 4) * 0.16;
         }
       });
+      animatedDice.forEach((animation) => {
+        const progress = Math.min(elapsed / animation.duration, 1);
+        const eased = 1 - (1 - progress) ** 3;
+        const bounce = Math.sin(progress * Math.PI) * 0.42 * (1 - progress * 0.25);
+
+        animation.die.position.lerpVectors(animation.startPosition, animation.targetPosition, eased);
+        animation.die.position.y += bounce;
+        animation.die.rotation.set(
+          THREE.MathUtils.lerp(animation.startRotation.x, animation.targetRotation.x, eased),
+          THREE.MathUtils.lerp(animation.startRotation.y, animation.targetRotation.y, eased),
+          THREE.MathUtils.lerp(animation.startRotation.z, animation.targetRotation.z, eased),
+        );
+      });
 
       controls.update();
       renderer.render(scene, camera);
@@ -425,6 +503,7 @@ function CatanScene({
     activePlayers,
     board,
     cameraResetKey,
+    diceRoll,
     onPlaceRoad,
     onPlaceSettlement,
     placementOptions,
