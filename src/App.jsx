@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
@@ -146,6 +146,50 @@ function App() {
     [dispatch, game],
   );
 
+  // Dev-only hooks for Playwright / manual debugging (not a production multiplayer API).
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return undefined;
+    }
+
+    window.__CATAN_TEST_API = {
+      getState: () => ({
+        confirmedPlayers,
+        boardSeed: board.seed,
+        phase: game?.phase ?? null,
+        currentPlayerId: game?.currentPlayerId ?? null,
+        setupSettlementId: game?.setupSettlementId ?? null,
+        settlementOptions: placementOptions.settlements.map((vertex) => vertex.id),
+        roadOptions: placementOptions.roads.map((edge) => edge.id),
+        settlementCount: placements.settlements.length,
+        roadCount: placements.roads.length,
+        error: gameError || null,
+        resources: game
+          ? Object.fromEntries(
+              game.players.map((player) => [player.id, { ...player.resources }]),
+            )
+          : null,
+      }),
+      placeSettlement: handlePlaceSettlement,
+      placeRoad: handlePlaceRoad,
+    };
+
+    return () => {
+      delete window.__CATAN_TEST_API;
+    };
+  }, [
+    board.seed,
+    confirmedPlayers,
+    game,
+    gameError,
+    handlePlaceRoad,
+    handlePlaceSettlement,
+    placementOptions.roads,
+    placementOptions.settlements,
+    placements.roads.length,
+    placements.settlements.length,
+  ]);
+
   return (
     <main className="app-shell">
       <section className="setup-section" aria-labelledby="setup-title">
@@ -166,17 +210,28 @@ function App() {
         />
 
         <div className="debug-actions" aria-label="Board debug controls">
-          <button type="button" onClick={handleRandomizeBoard}>
+          <button type="button" data-testid="randomize-board" onClick={handleRandomizeBoard}>
             Randomize Board
           </button>
-          <button type="button" className="secondary-button" onClick={handleResetCamera}>
+          <button
+            type="button"
+            className="secondary-button"
+            data-testid="reset-camera"
+            onClick={handleResetCamera}
+          >
             Reset Camera
           </button>
-          <button type="button" onClick={handleStartGame} disabled={!confirmedPlayers}>
+          <button
+            type="button"
+            data-testid="start-game"
+            onClick={handleStartGame}
+            disabled={!confirmedPlayers}
+          >
             {game ? 'Restart Game' : 'Start Game'}
           </button>
           <button
             type="button"
+            data-testid="roll-dice"
             onClick={handleRollDice}
             disabled={game?.phase !== 'roll'}
           >
@@ -184,6 +239,7 @@ function App() {
           </button>
           <button
             type="button"
+            data-testid="end-turn"
             onClick={() => dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
             disabled={game?.phase !== 'action'}
           >
@@ -191,20 +247,43 @@ function App() {
           </button>
         </div>
 
-        <div className="status-panel">
+        <div className="status-panel" data-testid="status-panel">
           <p className="status-label">Room setup</p>
-          <p className="status-message">{playerMessage}</p>
-          {game && <p className="helper-text">Engine phase: {game.phase}</p>}
-          {game?.dice && <p className="helper-text">Last roll: {game.dice.join(' + ')} = {diceTotal}</p>}
-          {gameError && <p className="game-error" role="alert">{gameError}</p>}
+          <p className="status-message" data-testid="status-message">
+            {playerMessage}
+          </p>
+          {game && (
+            <p className="helper-text" data-testid="engine-phase">
+              Engine phase: {game.phase}
+            </p>
+          )}
+          {game?.dice && (
+            <p className="helper-text" data-testid="last-roll">
+              Last roll: {game.dice.join(' + ')} = {diceTotal}
+            </p>
+          )}
+          {gameError && (
+            <p className="game-error" role="alert" data-testid="game-error">
+              {gameError}
+            </p>
+          )}
         </div>
 
         {game && (
-          <div className="player-state-list" aria-label="Player resources">
+          <div className="player-state-list" aria-label="Player resources" data-testid="player-resources">
             {game.players.map((player) => (
-              <div className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'} key={player.id}>
+              <div
+                className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'}
+                key={player.id}
+                data-testid={`player-state-${player.id}`}
+                data-active={player.id === game.currentPlayerId ? 'true' : 'false'}
+              >
                 <strong>{player.name}</strong>
-                <span>{Object.entries(player.resources).map(([resource, count]) => `${resource}: ${count}`).join(' · ')}</span>
+                <span data-testid={`player-resources-${player.id}`}>
+                  {Object.entries(player.resources)
+                    .map(([resource, count]) => `${resource}: ${count}`)
+                    .join(' · ')}
+                </span>
               </div>
             ))}
           </div>
@@ -238,18 +317,22 @@ function App() {
         <div className="board-debug">
           <div>
             <p className="status-label">Board seed</p>
-            <p className="seed-value">{board.seed}</p>
+            <p className="seed-value" data-testid="board-seed">
+              {board.seed}
+            </p>
           </div>
           {game && (
             <div>
               <p className="status-label">Current player</p>
-              <p className="seed-value">{currentPlayer?.label}</p>
+              <p className="seed-value" data-testid="current-player-label">
+                {currentPlayer?.label}
+              </p>
             </div>
           )}
           {game && (
             <div>
               <p className="status-label">Cards in play</p>
-              <p className="seed-value">
+              <p className="seed-value" data-testid="cards-in-play">
                 {resourceHands.reduce((total, hand) => total + hand.cards.length, 0)}
               </p>
             </div>

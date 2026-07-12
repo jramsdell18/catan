@@ -29,8 +29,9 @@ The engine already implements robber/discard, building, development cards, and t
 - `npm run test` runs Vitest unit tests for the rules engine (`tests/rules/`) and UI↔rules adapters (`tests/game/`).
 - `npm run test:watch` runs Vitest in watch mode.
 - `npm run test:rules` runs node:test checks for board number-token distribution (`tests/board-rules.test.js`).
-- `npm run test:render` runs Playwright checks that the 3D board renders on desktop and mobile viewports.
-- `npm run test:all` runs Vitest, board-token checks, then Playwright render checks.
+- `npm run test:e2e` runs all Playwright specs (3D render smoke + UI game-flow).
+- `npm run test:render` runs only the 3D canvas smoke specs.
+- `npm run test:all` runs Vitest, board-token checks, then full Playwright e2e.
 
 ## Project layout
 

@@ -10,8 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rules": "node --test tests/board-rules.test.js",
-    "test:render": "playwright test",
-    "test:all": "npm run test && npm run test:rules && npm run test:render"
+    "test:e2e": "playwright test",
+    "test:render": "playwright test tests/three-render.spec.js",
+    "test:all": "npm run test && npm run test:rules && npm run test:e2e"
   },
   "dependencies": {
     "react": "^19.0.0",
