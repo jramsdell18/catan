@@ -16,7 +16,7 @@ Open the local URL printed by Vite. The current screen lets you pick a player co
 1. Run `npm install`, then `npm run dev`.
 2. Choose 3 or 4 players, select **Set Players**, and select **Start Game**.
 3. Follow the highlighted intersections and edges to place each settlement and road. The rules engine enforces the distance rule, road adjacency, and the two-round snake order.
-4. After setup, confirm the phase changes to `roll` and that resources from every second settlement appear in the player summaries.
+4. After setup, confirm the phase changes to `roll` and every player has one wood, brick, ore, hay, and sheep.
 5. Select **Roll Dice**. A normal production roll changes the phase to `action`; inspect the resource totals, then select **End Turn** and confirm the current player changes.
 
 The engine already implements robber/discard, building, development cards, and trade commands, but the corresponding UI controls are still to be added. A roll of 7 will therefore display the required phase but cannot yet be completed from the UI.
@@ -26,7 +26,11 @@ The engine already implements robber/discard, building, development cards, and t
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
+- `npm run test` runs Vitest unit tests for the rules engine (`tests/rules/`).
+- `npm run test:watch` runs Vitest in watch mode.
+- `npm run test:rules` runs node:test checks for board number-token distribution (`tests/board-rules.test.js`).
 - `npm run test:render` runs Playwright checks that the 3D board renders on desktop and mobile viewports.
+- `npm run test:all` runs rules-engine unit tests, board-token checks, then Playwright render checks.
 
 ## Project layout
 

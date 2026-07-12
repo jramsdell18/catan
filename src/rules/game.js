@@ -127,18 +127,15 @@ function placeSettlement(state, action) {
   player.pieces.settlements -= 1;
   if (setup) {
     state.setupSettlementId = action.intersectionId;
-    if (state.setupDirection === -1) grantStartingResources(state, player, action.intersectionId);
+    if (state.setupDirection === -1) grantStartingResources(state, player);
   }
 }
 
-function grantStartingResources(state, player, intersectionId) {
-  for (const tile of Object.values(state.board.tiles)) {
-    if (!tile.intersections.includes(intersectionId)) continue;
-    const resource = TERRAIN_RESOURCE[tile.terrain];
-    if (resource && state.bank[resource] > 0) {
-      state.bank[resource] -= 1;
-      player.resources[resource] += 1;
-    }
+function grantStartingResources(state, player) {
+  for (const resource of RESOURCE_TYPES) {
+    if (state.bank[resource] < 1) throw new Error(`The bank does not have enough ${resource}.`);
+    state.bank[resource] -= 1;
+    player.resources[resource] += 1;
   }
 }
 
@@ -361,4 +358,3 @@ export function applyAction(game, action, { random = Math.random } = {}) {
   }
   return state;
 }
-

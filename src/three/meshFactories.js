@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import plasticTextureUrl from '../assets/plastic.jpg';
 import { TERRAIN_TYPES } from '../game/terrain.js';
 
 const HEX_HEIGHT = 0.22;
@@ -19,9 +20,17 @@ const NUMBER_TOKEN_PIPS = {
   12: 1,
 };
 
+const plasticTexture = new THREE.TextureLoader().load(plasticTextureUrl);
+plasticTexture.colorSpace = THREE.SRGBColorSpace;
+plasticTexture.wrapS = THREE.RepeatWrapping;
+plasticTexture.wrapT = THREE.RepeatWrapping;
+plasticTexture.repeat.set(1.4, 1.4);
+plasticTexture.userData.sharedAsset = true;
+
 function makeMaterial(color, options = {}) {
   return new THREE.MeshStandardMaterial({
     color,
+    map: plasticTexture,
     roughness: 0.72,
     metalness: 0.04,
     ...options,

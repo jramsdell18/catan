@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import plasticTextureUrl from '../assets/plastic.jpg';
+import woodTextureUrl from '../assets/wood.jpg';
 import {
   createCityMesh,
   createDiceMesh,
@@ -25,7 +27,7 @@ function disposeScene(scene) {
 
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.filter(Boolean).forEach((material) => {
-      if (material.map) {
+      if (material.map && !material.map.userData.sharedAsset) {
         material.map.dispose();
       }
 
@@ -329,7 +331,7 @@ function CatanScene({
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     container.appendChild(renderer.domElement);
 
@@ -358,9 +360,24 @@ function CatanScene({
     const animatedHighlights = [];
     const animatedDice = [];
 
+    const woodTexture = new THREE.TextureLoader().load(woodTextureUrl);
+    woodTexture.colorSpace = THREE.SRGBColorSpace;
+    woodTexture.wrapS = THREE.RepeatWrapping;
+    woodTexture.wrapT = THREE.RepeatWrapping;
+    woodTexture.center.set(0.5, 0.5);
+    woodTexture.rotation = Math.PI / 2;
+    woodTexture.repeat.set(1.65, 1.5);
+    woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const plasticTexture = new THREE.TextureLoader().load(plasticTextureUrl);
+    plasticTexture.colorSpace = THREE.SRGBColorSpace;
+    plasticTexture.wrapS = THREE.RepeatWrapping;
+    plasticTexture.wrapT = THREE.RepeatWrapping;
+    plasticTexture.repeat.set(1.2, 1.2);
+
     const playerTable = new THREE.Mesh(
-      new THREE.BoxGeometry(19, 0.12, 17),
-      new THREE.MeshStandardMaterial({ color: '#7a4b2a', roughness: 0.86 }),
+      new THREE.BoxGeometry(57, 0.12, 51),
+      new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.82 }),
     );
     playerTable.position.y = -0.28;
     playerTable.receiveShadow = true;
@@ -368,7 +385,7 @@ function CatanScene({
 
     const boardTable = new THREE.Mesh(
       new THREE.CylinderGeometry(5.8, 5.8, 0.2, 6),
-      new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 }),
+      new THREE.MeshStandardMaterial({ color: '#1f6f78', map: plasticTexture, roughness: 0.8 }),
     );
     boardTable.rotation.y = Math.PI / 6;
     boardTable.position.y = -0.02;
@@ -399,7 +416,7 @@ function CatanScene({
       renderer.setSize(safeWidth, safeHeight, false);
 
       const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 17.5 : 15.4, isNarrow ? 17.8 : 16.2);
+      camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
       camera.lookAt(controls.target);
       controls.update();
     }
@@ -441,10 +458,9 @@ function CatanScene({
 
     let animationId = 0;
     let renderedFrames = 0;
-    const clock = new THREE.Clock();
 
     function animate() {
-      const elapsed = clock.getElapsedTime();
+      const elapsed = performance.now() / 1000;
       const pulse = 1 + Math.sin(elapsed * 4) * 0.08;
       animatedHighlights.forEach((highlight) => {
         highlight.scale.setScalar(pulse);
