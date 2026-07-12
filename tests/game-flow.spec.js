@@ -328,4 +328,49 @@ test.describe('setup snake through production turn', () => {
     expect(viewAfterRob.players.find((player) => player.id === 'blue').hasResourceBreakdown).toBe(false);
     expect(viewAfterRob.players.find((player) => player.id === 'red').hasResourceBreakdown).toBe(true);
   });
+
+  test('completes maritime and domestic trade workflows', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+    await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+    await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', { sheep: 4, wood: 2 }));
+    await page.evaluate(() => window.__CATAN_TEST_API.giveResources('blue', { brick: 2 }));
+
+    await page.getByTestId('toggle-trades').click();
+    await page.getByTestId('maritime-give').selectOption('sheep');
+    await page.getByTestId('maritime-receive').selectOption('ore');
+    const maritimeButton = page.getByTestId('maritime-trade').getByRole('button', { name: /Trade \d for 1/ });
+    const ratio = Number((await maritimeButton.innerText()).match(/\d+/)[0]);
+    const beforeMaritime = await getTestState(page);
+    await maritimeButton.click();
+    await expect.poll(async () => (await getTestState(page)).resources.red.ore).toBe(beforeMaritime.resources.red.ore + 1);
+    const afterMaritime = await getTestState(page);
+    expect(afterMaritime.resources.red.sheep).toBe(beforeMaritime.resources.red.sheep - ratio);
+
+    await page.getByTestId('trade-target').selectOption('blue');
+    await page.getByTestId('trade-give-wood').fill('1');
+    await page.getByTestId('trade-receive-brick').fill('1');
+    const beforeDomestic = await getTestState(page);
+    await page.getByTestId('offer-trade').click();
+    await expect(page.getByTestId('pending-trade')).toBeVisible();
+    await page.getByTestId('accept-trade-blue').click();
+    await expect(page.getByTestId('pending-trade')).toBeHidden();
+    const afterDomestic = await getTestState(page);
+    expect(afterDomestic.resources.red.wood).toBe(beforeDomestic.resources.red.wood - 1);
+    expect(afterDomestic.resources.red.brick).toBe(beforeDomestic.resources.red.brick + 1);
+    expect(afterDomestic.resources.blue.wood).toBe(beforeDomestic.resources.blue.wood + 1);
+    expect(afterDomestic.resources.blue.brick).toBe(beforeDomestic.resources.blue.brick - 1);
+
+    await page.getByTestId('offer-trade').click();
+    await page.getByTestId('reject-trade-blue').click();
+    await expect(page.getByTestId('pending-trade')).toBeHidden();
+    await page.getByTestId('offer-trade').click();
+    await page.getByTestId('cancel-trade').click();
+    await expect(page.getByTestId('pending-trade')).toBeHidden();
+  });
 });

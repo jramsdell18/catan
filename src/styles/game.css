@@ -150,6 +150,41 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 .victim-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 .production-warning { color: #8c4d16; font-weight: 700; }
 
+.trade-panel { min-width: 0; }
+.trade-toggle { width: 100%; }
+.trade-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.78);
+}
+.trade-content > .status-label { grid-column: 1 / -1; }
+.maritime-trade,
+.domestic-trade,
+.pending-trade { display: grid; align-content: start; gap: 0.6rem; min-width: 0; }
+.maritime-trade { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; }
+.maritime-trade h3,
+.maritime-trade button,
+.maritime-trade .trade-help { grid-column: 1 / -1; }
+.maritime-trade label,
+.domestic-trade > label { display: grid; gap: 0.3rem; font-size: 0.78rem; font-weight: 800; }
+.trade-ratio { padding-bottom: 0.8rem; color: #8a4d2a; }
+.trade-help { margin: 0; color: #5c6862; font-size: 0.8rem; }
+.trade-bundles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.trade-bundle { display: grid; gap: 0.35rem; min-width: 0; margin: 0; border: 1px solid rgba(23, 33, 29, 0.14); border-radius: 6px; padding: 0.55rem; }
+.trade-bundle legend { font-weight: 800; }
+.trade-bundle label { display: grid; grid-template-columns: 1fr 4rem; align-items: center; gap: 0.35rem; text-transform: capitalize; }
+.trade-bundle input { min-height: 34px; padding: 0.35rem; }
+.pending-trade { border-radius: 6px; padding: 0.65rem; background: #fffaf0; }
+.pending-trade h3,
+.pending-trade p { margin: 0; }
+.trade-response { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0.45rem; }
+.trade-response button { min-height: 36px; padding: 0.45rem 0.65rem; }
+
 @media (min-width: 620px) {
   .start-overlay { padding: 1.75rem; }
   .start-controls { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
@@ -166,7 +201,8 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   .required-action-panel,
-  .roll-outcome { grid-column: 1 / -1; }
+  .roll-outcome,
+  .trade-panel { grid-column: 1 / -1; }
   .control-actions { grid-column: 2; }
   .table-meta { grid-column: 3; grid-template-columns: 1fr; }
   .resource-strip { grid-column: 1 / -1; }

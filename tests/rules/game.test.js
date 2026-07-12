@@ -532,6 +532,50 @@ describe('trade', () => {
     game = applyAction(game, { type: 'cancelTrade', playerId: 'p1' });
     expect(game.tradeOffer).toBeNull();
   });
+
+  it('rejects empty, invalid, and self-targeted trade offers', () => {
+    const game = setPhase(completeSetup(newGame()), 'action', 'p1');
+    expect(() => applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', give: {}, receive: { brick: 1 },
+    })).toThrow(/at least one/);
+    expect(() => applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', give: { wood: -1 }, receive: { brick: 1 },
+    })).toThrow(/Invalid Offered/);
+    expect(() => applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', toPlayerId: 'p1', give: { wood: 1 }, receive: { brick: 1 },
+    })).toThrow(/another player/);
+  });
+
+  it('allows an eligible opponent to reject a trade', () => {
+    let game = setPhase(completeSetup(newGame()), 'action', 'p1');
+    game = applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', toPlayerId: 'p2', give: { wood: 1 }, receive: { brick: 1 },
+    });
+    expect(() => applyAction(game, { type: 'rejectTrade', playerId: 'p3' })).toThrow(/cannot reject/);
+    game = applyAction(game, { type: 'rejectTrade', playerId: 'p2' });
+    expect(game.tradeOffer).toBeNull();
+    expect(game.lastTrade).toMatchObject({ type: 'rejected', playerId: 'p2' });
+  });
+
+  it('rejects acceptance after an offered hand becomes stale', () => {
+    let game = setPhase(completeSetup(newGame()), 'action', 'p1');
+    game = applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', toPlayerId: 'p2', give: { wood: 1 }, receive: { brick: 1 },
+    });
+    game = structuredClone(game);
+    player(game, 'p2').resources.brick = 0;
+    expect(() => applyAction(game, { type: 'acceptTrade', playerId: 'p2' })).toThrow(/no longer/);
+  });
+
+  it('expires an unaccepted offer when the turn ends', () => {
+    let game = setPhase(completeSetup(newGame()), 'action', 'p1');
+    game = applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', give: { wood: 1 }, receive: { brick: 1 },
+    });
+    game = applyAction(game, { type: 'endTurn', playerId: 'p1' });
+    expect(game.tradeOffer).toBeNull();
+    expect(game.lastTrade).toEqual({ type: 'expired', fromPlayerId: 'p1' });
+  });
 });
 
 describe('turns and victory', () => {
@@ -565,7 +609,7 @@ describe('turns and victory', () => {
     let game = completeSetup(newGame());
     game = setPhase(game, 'action', 'p1');
     // Clear buildings so a five-edge chain is not split by opponents, then
-    // trigger recalculateAwards via a no-op-cost trade offer.
+    // trigger recalculateAwards through a valid turn action.
     game = structuredClone(game);
     for (const intersection of Object.values(game.board.intersections)) {
       intersection.building = null;
@@ -576,12 +620,7 @@ describe('turns and victory', () => {
     for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) {
       game.board.edges[id].road = 'p1';
     }
-    game = applyAction(game, {
-      type: 'offerTrade',
-      playerId: 'p1',
-      give: { wood: 0 },
-      receive: { brick: 0 },
-    });
+    game = applyAction(game, { type: 'endTurn', playerId: 'p1' });
     expect(game.longestRoadPlayerId).toBe('p1');
   });
 });

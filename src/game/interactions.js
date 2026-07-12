@@ -103,6 +103,7 @@ const ACTION_LABELS = Object.freeze({
   offerTrade: 'offered a trade',
   acceptTrade: 'accepted a trade',
   cancelTrade: 'cancelled a trade',
+  rejectTrade: 'rejected a trade',
   endTurn: 'ended their turn',
 });
 

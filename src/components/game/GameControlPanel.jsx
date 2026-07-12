@@ -5,6 +5,7 @@ import RobberWorkflow from './RobberWorkflow.jsx';
 import RollOutcome from './RollOutcome.jsx';
 import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
+import TradeControls from './TradeControls.jsx';
 
 function GameControlPanel(props) {
   const { game, playerView = null } = props;
@@ -22,6 +23,7 @@ function GameControlPanel(props) {
         onChooseDifferentHex={props.onChooseDifferentRobberHex}
       />
       <RollOutcome game={game} playerView={playerView} />
+      <TradeControls game={game} onAction={props.onTradeAction} />
       <div className="control-actions">
         <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll'}>Roll Dice</button>
         <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase}>End Turn</button>

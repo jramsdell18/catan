@@ -59,6 +59,7 @@ export function createGame({ players, board, random = Math.random }) {
     lastProduction: null,
     lastRobbery: null,
     tradeOffer: null,
+    lastTrade: null,
     longestRoadPlayerId: null,
     largestArmyPlayerId: null,
     winnerId: null,
@@ -308,13 +309,32 @@ function maritimeTrade(state, action) {
   state.bank[action.give] += ratio;
   state.bank[action.receive] -= 1;
   player.resources[action.receive] += 1;
+  state.lastTrade = { type: 'maritime', playerId: action.playerId, give: action.give, receive: action.receive, ratio };
+}
+
+function validateTradeBundle(bundle, label) {
+  if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) throw new Error(`Invalid ${label} bundle.`);
+  let total = 0;
+  for (const [resource, amount] of Object.entries(bundle)) {
+    if (!RESOURCE_TYPES.includes(resource) || !Number.isInteger(amount) || amount < 0) {
+      throw new Error(`Invalid ${label} bundle.`);
+    }
+    total += amount;
+  }
+  if (total < 1) throw new Error(`${label} bundle must contain at least one resource.`);
 }
 
 function offerTrade(state, action) {
   requireTurn(state, action.playerId);
   requirePhase(state, 'action');
+  validateTradeBundle(action.give, 'Offered');
+  validateTradeBundle(action.receive, 'Requested');
+  if (action.toPlayerId && (!playerById(state, action.toPlayerId) || action.toPlayerId === action.playerId)) {
+    throw new Error('Trade target must be another player.');
+  }
   if (!hasResources(currentPlayer(state), action.give)) throw new Error('Offering player lacks those resources.');
   state.tradeOffer = { fromPlayerId: action.playerId, toPlayerId: action.toPlayerId ?? null, give: copy(action.give), receive: copy(action.receive) };
+  state.lastTrade = { type: 'offered', playerId: action.playerId };
 }
 
 function acceptTrade(state, action) {
@@ -331,6 +351,25 @@ function acceptTrade(state, action) {
     to.resources[resource] += given - received;
   }
   state.tradeOffer = null;
+  state.lastTrade = { type: 'accepted', fromPlayerId: offer.fromPlayerId, toPlayerId: action.playerId };
+}
+
+function cancelTrade(state, action) {
+  requireTurn(state, action.playerId);
+  requirePhase(state, 'action');
+  if (!state.tradeOffer || state.tradeOffer.fromPlayerId !== action.playerId) throw new Error('Only the offering player can cancel this trade.');
+  state.tradeOffer = null;
+  state.lastTrade = { type: 'cancelled', playerId: action.playerId };
+}
+
+function rejectTrade(state, action) {
+  requirePhase(state, 'action');
+  const offer = state.tradeOffer;
+  if (!offer || offer.fromPlayerId === action.playerId || (offer.toPlayerId && offer.toPlayerId !== action.playerId)) {
+    throw new Error('This player cannot reject the trade.');
+  }
+  state.tradeOffer = null;
+  state.lastTrade = { type: 'rejected', playerId: action.playerId, fromPlayerId: offer.fromPlayerId };
 }
 
 function endTurn(state, action) {
@@ -341,6 +380,7 @@ function endTurn(state, action) {
     state.winnerId = action.playerId;
     return;
   }
+  if (state.tradeOffer) state.lastTrade = { type: 'expired', fromPlayerId: state.tradeOffer.fromPlayerId };
   state.turnIndex += 1;
   state.currentPlayerId = state.players[state.turnIndex % state.players.length].id;
   state.phase = 'roll';
@@ -366,7 +406,8 @@ export function applyAction(game, action, { random = Math.random } = {}) {
     maritimeTrade: () => maritimeTrade(state, action),
     offerTrade: () => offerTrade(state, action),
     acceptTrade: () => acceptTrade(state, action),
-    cancelTrade: () => { requireTurn(state, action.playerId); state.tradeOffer = null; },
+    cancelTrade: () => cancelTrade(state, action),
+    rejectTrade: () => rejectTrade(state, action),
     endTurn: () => endTurn(state, action),
   };
   if (!handlers[action.type]) throw new Error(`Unknown action: ${action.type}.`);

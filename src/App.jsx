@@ -345,6 +345,7 @@ function App() {
           victimId,
         })}
         onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
+        onTradeAction={dispatch}
       />
     </main>
   );

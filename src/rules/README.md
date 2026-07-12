@@ -33,7 +33,7 @@ game = applyAction(game, { type: 'placeRoad', playerId: 'p1', edgeId: 'e18' });
 
 ## Supported commands
 
-`placeSettlement`, `placeRoad`, `buildCity`, `rollDice`, `discard`, `moveRobber`, `buyDevelopment`, `playDevelopment`, `maritimeTrade`, `offerTrade`, `acceptTrade`, `cancelTrade`, and `endTurn`.
+`placeSettlement`, `placeRoad`, `buildCity`, `rollDice`, `discard`, `moveRobber`, `buyDevelopment`, `playDevelopment`, `maritimeTrade`, `offerTrade`, `acceptTrade`, `rejectTrade`, `cancelTrade`, and `endTurn`.
 
 The engine covers the usual base-game setup snake, distance/connectivity rules, costs and piece limits, production and bank shortages, robber/discards, domestic and maritime trade, development cards, longest road (including blocking), largest army, and a 10-point win. Victory-point cards are represented in full engine state and must be hidden from opponents via `getPlayerView` (see below) before showing a seat’s UI or sending state to a client.
 

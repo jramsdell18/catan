@@ -107,20 +107,20 @@ Every possible dice result, including 7, can be resolved entirely from the UI wi
 
 ### Maritime trade
 
-- [ ] Add give-resource and receive-resource selectors.
-- [ ] Calculate and display the player's best available 4:1, 3:1, or 2:1 ratio.
-- [ ] Show which ports the player controls.
-- [ ] Disable trades the player or bank cannot fulfill.
-- [ ] Dispatch maritime trades through the engine.
+- [x] Add give-resource and receive-resource selectors.
+- [x] Calculate and display the player's best available 4:1, 3:1, or 2:1 ratio.
+- [x] Show which ports the player controls.
+- [x] Disable trades the player or bank cannot fulfill.
+- [x] Dispatch maritime trades through the engine.
 
 ### Domestic trade
 
-- [ ] Add an offer builder for resources given and requested.
-- [ ] Allow offers to target one player or remain open to opponents.
-- [ ] Add accept, reject, cancel, and expiration states.
-- [ ] Revalidate both hands when an offer is accepted.
-- [ ] Display pending and completed trades in the event history.
-- [ ] Add UI integration tests for valid, invalid, stale, cancelled, maritime, and domestic trades.
+- [x] Add an offer builder for resources given and requested.
+- [x] Allow offers to target one player or remain open to opponents.
+- [x] Add accept, reject, cancel, and expiration states.
+- [x] Revalidate both hands when an offer is accepted.
+- [x] Display pending and completed trades in the event history.
+- [x] Add UI integration tests for valid, invalid, stale, cancelled, maritime, and domestic trades.
 
 ### Done when
 
