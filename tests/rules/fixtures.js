@@ -7,7 +7,7 @@ import { createBoard, createGame, applyAction } from '../../src/rules/index.js';
  * Settlements may be placed on even vertices without violating distance
  * (adjacent odds are left empty): v0, v2, v4, v6, v8, v10, v12, v14.
  *
- * Tiles sit on short segments so production and starting resources are predictable.
+ * Tiles sit on short segments so production is predictable.
  */
 export function buildFixtureBoard() {
   const intersections = Array.from({ length: 16 }, (_, i) => ({ id: `v${i}` }));
@@ -69,7 +69,7 @@ export function newGame(players = THREE_PLAYERS, random = fixedRandom()) {
 /**
  * Setup placements for 3 players on non-adjacent even vertices.
  * Order follows the engine snake: p1, p2, p3, p3, p2, p1.
- * Second-round settlements grant starting resources.
+ * Second-round settlements trigger the standard configured starting hand.
  */
 const SETUP_PLANS_3 = [
   { playerId: 'p1', intersectionId: 'v0', edgeId: 'e0' },

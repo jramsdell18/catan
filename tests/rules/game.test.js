@@ -118,31 +118,16 @@ describe('setup phase', () => {
     ).toThrow(/distance/);
   });
 
-  it('runs the 3-player setup snake and grants second-round resources', () => {
+  it('runs the 3-player setup snake and grants one of every resource', () => {
     const game = completeSetup(newGame(), 3);
     expect(game.phase).toBe('roll');
     expect(game.currentPlayerId).toBe('p1');
 
-    // Second settlements: p3@v12, p2@v2, p1@v6
-    // v12 touches forest-3 (wood) and hills-10 (brick)
-    expect(player(game, 'p3').resources.wood).toBeGreaterThanOrEqual(1);
-    expect(player(game, 'p3').resources.brick).toBeGreaterThanOrEqual(1);
-
-    // v2 touches forest-6 (wood) and hills-8 (brick)
-    expect(player(game, 'p2').resources.wood).toBeGreaterThanOrEqual(1);
-    expect(player(game, 'p2').resources.brick).toBeGreaterThanOrEqual(1);
-
-    // v6 touches fields-4 (hay) and mountains-5 (ore)
-    expect(player(game, 'p1').resources.hay).toBeGreaterThanOrEqual(1);
-    expect(player(game, 'p1').resources.ore).toBeGreaterThanOrEqual(1);
-
-    // First-round settlements should not have granted resources
-    // p1 also has second settlement resources only from v6 (not v0 desert/forest double-count beyond tiles)
-    const totalCards = (id) =>
-      Object.values(player(game, id).resources).reduce((sum, n) => sum + n, 0);
-    expect(totalCards('p1')).toBe(2); // hay + ore from v6 tiles
-    expect(totalCards('p2')).toBe(2);
-    expect(totalCards('p3')).toBe(2);
+    const startingHand = { wood: 1, brick: 1, ore: 1, hay: 1, sheep: 1 };
+    expect(player(game, 'p1').resources).toEqual(startingHand);
+    expect(player(game, 'p2').resources).toEqual(startingHand);
+    expect(player(game, 'p3').resources).toEqual(startingHand);
+    expect(game.bank).toEqual({ wood: 16, brick: 16, ore: 16, hay: 16, sheep: 16 });
   });
 
   it('completes 4-player setup into roll phase', () => {
@@ -150,6 +135,8 @@ describe('setup phase', () => {
     expect(game.phase).toBe('roll');
     expect(game.currentPlayerId).toBe('p1');
     expect(game.players).toHaveLength(4);
+    expect(player(game, 'p4').resources).toEqual({ wood: 1, brick: 1, ore: 1, hay: 1, sheep: 1 });
+    expect(game.bank).toEqual({ wood: 15, brick: 15, ore: 15, hay: 15, sheep: 15 });
   });
 });
 
@@ -278,16 +265,20 @@ describe('building during action phase', () => {
     game = setPhase(game, 'action', 'p1');
     game = giveResources(game, 'p1', { wood: 1, brick: 1 });
     const woodBefore = player(game, 'p1').resources.wood;
+    const brickBefore = player(game, 'p1').resources.brick;
     // p1 setup road e6 touches v6; e5 extends that network
     game = applyAction(game, { type: 'placeRoad', playerId: 'p1', edgeId: 'e5' });
     expect(game.board.edges.e5.road).toBe('p1');
     expect(player(game, 'p1').resources.wood).toBe(woodBefore - 1);
-    expect(player(game, 'p1').resources.brick).toBe(0);
+    expect(player(game, 'p1').resources.brick).toBe(brickBefore - 1);
   });
 
   it('rejects unaffordable roads', () => {
     let game = completeSetup(newGame());
     game = setPhase(game, 'action', 'p1');
+    game = structuredClone(game);
+    player(game, 'p1').resources.wood = 0;
+    player(game, 'p1').resources.brick = 0;
     expect(() =>
       applyAction(game, { type: 'placeRoad', playerId: 'p1', edgeId: 'e5' }),
     ).toThrow(/cannot afford/);
@@ -394,6 +385,7 @@ describe('development cards', () => {
     game = giveResources(game, 'p2', { sheep: 2 });
     game = giveResources(game, 'p3', { sheep: 1 });
     game = structuredClone(game);
+    const expectedSheep = game.players.reduce((total, item) => total + item.resources.sheep, 0);
     player(game, 'p1').developmentCards.push({ type: 'monopoly', boughtTurn: -1 });
     game = applyAction(game, {
       type: 'playDevelopment',
@@ -401,7 +393,7 @@ describe('development cards', () => {
       card: 'monopoly',
       resource: 'sheep',
     });
-    expect(player(game, 'p1').resources.sheep).toBe(3);
+    expect(player(game, 'p1').resources.sheep).toBe(expectedSheep);
     expect(player(game, 'p2').resources.sheep).toBe(0);
     expect(player(game, 'p3').resources.sheep).toBe(0);
   });
@@ -474,14 +466,16 @@ describe('trade', () => {
     // p4 second settlement at v14 owns wood 2:1 port
     game = setPhase(game, 'action', 'p4');
     game = giveResources(game, 'p4', { wood: 2 });
+    const woodBefore = player(game, 'p4').resources.wood;
+    const oreBefore = player(game, 'p4').resources.ore;
     game = applyAction(game, {
       type: 'maritimeTrade',
       playerId: 'p4',
       give: 'wood',
       receive: 'ore',
     });
-    expect(player(game, 'p4').resources.wood).toBe(0);
-    expect(player(game, 'p4').resources.ore).toBe(1);
+    expect(player(game, 'p4').resources.wood).toBe(woodBefore - 2);
+    expect(player(game, 'p4').resources.ore).toBe(oreBefore + 1);
   });
 
   it('offers and accepts a domestic trade', () => {
