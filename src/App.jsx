@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
-import { getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
+import { createPlayerInventories, getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
 import { createStartingResourceCards } from './game/resources.js';
 import {
   createSetupOrder,
@@ -33,6 +33,10 @@ function App() {
   const resourceHands = useMemo(
     () => createStartingResourceCards(activePlayers, topology, placements, setup?.status),
     [activePlayers, placements, setup?.status, topology],
+  );
+  const playerInventories = useMemo(
+    () => createPlayerInventories(activePlayers, placements),
+    [activePlayers, placements],
   );
   const currentSetupTurn = useMemo(() => getCurrentSetupTurn(setup), [setup]);
   const setupProgress = useMemo(() => getSetupProgress(setup), [setup]);
@@ -244,6 +248,7 @@ function App() {
           board={board}
           activePlayers={activePlayers}
           resourceHands={resourceHands}
+          playerInventories={playerInventories}
           cameraResetKey={cameraResetKey}
           topology={topology}
           placements={placements}

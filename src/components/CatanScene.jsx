@@ -140,36 +140,84 @@ function createCardStack(cards) {
   return group;
 }
 
-function createPlayerArea(player, cards) {
+function createRoadInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-roads';
+
+  Array.from({ length: count }, (_, index) => {
+    const road = createRoadMesh(player.color);
+    const col = index % 5;
+    const row = Math.floor(index / 5);
+    road.position.set(-1.35 + col * 0.28, 0, -0.42 + row * 0.22);
+    road.rotation.y = -Math.PI / 2;
+    group.add(road);
+
+    return road;
+  });
+
+  return group;
+}
+
+function createSettlementInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-settlements';
+
+  Array.from({ length: count }, (_, index) => {
+    const settlement = createSettlementMesh(player.color);
+    settlement.position.set(-1.32 + index * 0.33, 0, 0.34);
+    group.add(settlement);
+
+    return settlement;
+  });
+
+  return group;
+}
+
+function createCityInventory(player, count) {
+  const group = new THREE.Group();
+  group.name = 'available-cities';
+
+  Array.from({ length: count }, (_, index) => {
+    const city = createCityMesh(player.color);
+    city.position.set(0.45 + index * 0.42, 0, 0.23);
+    group.add(city);
+
+    return city;
+  });
+
+  return group;
+}
+
+function createPlayerArea(player, cards, inventory) {
   const playerGroup = new THREE.Group();
   playerGroup.name = `player-${player.seat}-${player.id}-area`;
 
-  const road = createRoadMesh(player.color);
-  road.position.set(-1.08, 0, 0);
-  road.rotation.y = -Math.PI / 8;
-
-  const settlement = createSettlementMesh(player.color);
-  settlement.position.set(-0.6, 0, 0);
-
-  const city = createCityMesh(player.color);
-  city.position.set(-0.12, 0, 0);
-
   const cardStack = createCardStack(cards);
-  cardStack.position.set(0.95, 0, 0);
+  cardStack.position.set(1.45, 0, -0.34);
 
-  playerGroup.add(road, settlement, city, cardStack);
+  playerGroup.add(
+    createRoadInventory(player, inventory.road),
+    createSettlementInventory(player, inventory.settlement),
+    createCityInventory(player, inventory.city),
+    cardStack,
+  );
 
   return playerGroup;
 }
 
-function addPlayerAreas(world, activePlayers, resourceHands) {
+function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) {
   const rack = new THREE.Group();
   rack.name = 'player-areas';
 
   activePlayers.forEach((player, index) => {
     const spot = PLAYER_RACK_SPOTS[index % PLAYER_RACK_SPOTS.length];
     const cards = resourceHands.find((hand) => hand.playerId === player.id)?.cards ?? [];
-    const playerGroup = createPlayerArea(player, cards);
+    const inventory = playerInventories.find((item) => item.playerId === player.id) ?? {
+      road: 0,
+      settlement: 0,
+      city: 0,
+    };
+    const playerGroup = createPlayerArea(player, cards, inventory);
     playerGroup.position.set(spot.x, PLAYER_TABLE_SURFACE_Y, spot.z);
     playerGroup.rotation.y = spot.rotation;
 
@@ -183,6 +231,7 @@ function CatanScene({
   board,
   activePlayers,
   resourceHands,
+  playerInventories,
   cameraResetKey,
   topology,
   placements,
@@ -264,7 +313,7 @@ function CatanScene({
     addPlacedPieces(world, activePlayers, topology, placements);
     addPlacementHighlights(world, placementOptions, interactionTargets);
     animatedHighlights.push(...interactionTargets);
-    addPlayerAreas(world, activePlayers, resourceHands);
+    addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     window.__CATAN_SCENE_STATS = {
       renderId,
       hexes: board.hexes.length,
@@ -377,6 +426,7 @@ function CatanScene({
     onPlaceSettlement,
     placementOptions,
     placements,
+    playerInventories,
     resourceHands,
     topology,
   ]);
