@@ -201,4 +201,67 @@ test.describe('setup snake through production turn', () => {
     expect(restarted.phase).toBe('setup');
     expect(restarted.currentPlayerId).toBe('red');
   });
+
+  test('builds roads, a settlement, and a city through the action controls', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+    await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+
+    await expect(page.getByTestId('build-road')).toContainText('1 brick + 1 wood');
+    await expect(page.getByTestId('build-city')).toContainText('3 ore + 2 hay');
+    await expect(page.getByTestId('build-city')).toBeDisabled();
+
+    await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', {
+      wood: 8, brick: 8, ore: 3, hay: 5, sheep: 3,
+    }));
+    await expect(page.getByTestId('build-city')).toBeEnabled();
+
+    const beforeCity = await getTestState(page);
+    await page.getByTestId('build-city').click();
+    const cityTargets = (await getTestState(page)).settlementOptions;
+    expect(cityTargets.length).toBeGreaterThan(0);
+    await page.evaluate((targetId) => window.__CATAN_TEST_API.selectTarget(targetId), cityTargets[0]);
+    await expect.poll(async () => (await getTestState(page)).cityCount).toBe(1);
+    await expect.poll(async () => page.evaluate(() => window.__CATAN_SCENE_STATS.placedCities)).toBe(1);
+    const afterCity = await getTestState(page);
+    expect(afterCity.resources.red.ore).toBe(beforeCity.resources.red.ore - 3);
+    expect(afterCity.resources.red.hay).toBe(beforeCity.resources.red.hay - 2);
+    expect(afterCity.inventories.red.city).toBe(beforeCity.inventories.red.city - 1);
+    expect(afterCity.inventories.red.settlement).toBe(beforeCity.inventories.red.settlement + 1);
+
+    const roadPlan = afterCity.settlementRoadPlan;
+    expect(roadPlan.length).toBeGreaterThan(0);
+    for (const edgeId of roadPlan) {
+      await page.getByTestId('build-road').click();
+      const roadTargets = (await getTestState(page)).roadOptions;
+      expect(roadTargets).toContain(edgeId);
+      const previousRoadCount = (await getTestState(page)).roadCount;
+      await page.evaluate((targetId) => window.__CATAN_TEST_API.selectTarget(targetId), edgeId);
+      await expect.poll(async () => (await getTestState(page)).roadCount).toBe(previousRoadCount + 1);
+    }
+
+    const state = await getTestState(page);
+    expect(state.buildAvailability.settlement.enabled).toBe(true);
+    const beforeSettlement = state;
+    await page.getByTestId('build-settlement').click();
+    const settlementTargets = (await getTestState(page)).settlementOptions;
+    expect(settlementTargets.length).toBeGreaterThan(0);
+    await page.evaluate((targetId) => window.__CATAN_TEST_API.selectTarget(targetId), settlementTargets[0]);
+    await expect.poll(async () => (await getTestState(page)).settlementCount)
+      .toBe(beforeSettlement.settlementCount + 1);
+    const afterSettlement = await getTestState(page);
+    expect(afterSettlement.resources.red.wood).toBe(beforeSettlement.resources.red.wood - 1);
+    expect(afterSettlement.resources.red.brick).toBe(beforeSettlement.resources.red.brick - 1);
+    expect(afterSettlement.resources.red.hay).toBe(beforeSettlement.resources.red.hay - 1);
+    expect(afterSettlement.resources.red.sheep).toBe(beforeSettlement.resources.red.sheep - 1);
+    expect(afterSettlement.inventories.red.settlement).toBe(beforeSettlement.inventories.red.settlement - 1);
+    expect(afterSettlement.phase).toBe('action');
+    await expect(page.getByTestId('end-turn')).toBeEnabled();
+  });
 });

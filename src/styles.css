@@ -189,6 +189,24 @@ h1 {
   gap: 0.65rem;
 }
 
+.build-button {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.build-button span {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  opacity: 0.78;
+}
+
+.build-button.selected {
+  outline: 3px solid #d9a441;
+  outline-offset: 1px;
+  background: #fff3c9;
+}
+
 .table-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

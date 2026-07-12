@@ -497,6 +497,9 @@ function CatanScene({
       ports: ports.length,
       robberTileId,
       players: activePlayers.length,
+      placedRoads: placements.roads.length,
+      placedSettlements: placements.settlements.length,
+      placedCities: placements.cities.length,
       dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
     };

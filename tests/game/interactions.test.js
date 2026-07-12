@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createRandomBoard } from '../../src/game/board.js';
 import {
   actionForTarget,
+  canAfford,
   describeLogEntry,
+  formatCost,
+  getBuildAvailability,
   getInteractionMode,
   getLegalTargets,
   INTERACTION_MODES,
@@ -59,5 +62,22 @@ describe('board interaction model', () => {
     const { game } = liveGame();
     expect(describeLogEntry({ type: 'placeSettlement', playerId: 'red' }, game.players))
       .toBe('Red placed a settlement.');
+  });
+
+  it('reports build affordability, inventory, targets, and readable costs', () => {
+    const { game } = liveGame();
+    expect(canAfford({ wood: 1, brick: 1 }, { wood: 1, brick: 1 })).toBe(true);
+    expect(canAfford({ wood: 1, brick: 0 }, { wood: 1, brick: 1 })).toBe(false);
+    expect(formatCost({ wood: 1, brick: 1 })).toBe('1 wood + 1 brick');
+    expect(getBuildAvailability(game).road.enabled).toBe(false);
+
+    const actionGame = structuredClone(game);
+    actionGame.phase = 'action';
+    actionGame.players[0].resources.wood = 1;
+    actionGame.players[0].resources.brick = 1;
+    expect(getBuildAvailability(actionGame, { road: 2 }).road.enabled).toBe(true);
+    expect(getBuildAvailability(actionGame, { road: 0 }).road.reason).toMatch(/No legal road/);
+    actionGame.players[0].pieces.roads = 0;
+    expect(getBuildAvailability(actionGame, { road: 2 }).road.reason).toMatch(/No road pieces/);
   });
 });

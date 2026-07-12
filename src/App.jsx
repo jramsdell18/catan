@@ -6,6 +6,9 @@ import {
   actionForTarget,
   describeAction,
   describeLogEntry,
+  formatCost,
+  findRoadPlanToSettlement,
+  getBuildAvailability,
   getInteractionMode,
   getLegalTargets,
   INTERACTION_LABELS,
@@ -54,6 +57,16 @@ function App() {
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
   const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
   const interactionMode = getInteractionMode(game, requestedMode);
+  const buildTargets = useMemo(() => ({
+    road: getLegalTargets(game, topology, board, INTERACTION_MODES.PLACE_ROAD).edges,
+    settlement: getLegalTargets(game, topology, board, INTERACTION_MODES.PLACE_SETTLEMENT).intersections,
+    city: getLegalTargets(game, topology, board, INTERACTION_MODES.BUILD_CITY).intersections,
+  }), [board, game, topology]);
+  const buildAvailability = useMemo(() => getBuildAvailability(game, {
+    road: buildTargets.road.length,
+    settlement: buildTargets.settlement.length,
+    city: buildTargets.city.length,
+  }), [buildTargets, game]);
 
   const playerMessage = useMemo(() => {
     if (!confirmedPlayers) return 'Choose a player count to start the room setup.';
@@ -186,6 +199,10 @@ function App() {
         hexOptions: legalTargets.hexes.map((hex) => hex.hexId),
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
+        cityCount: placements.cities.length,
+        inventories: Object.fromEntries(playerInventories.map((inventory) => [inventory.playerId, { ...inventory }])),
+        buildAvailability,
+        settlementRoadPlan: findRoadPlanToSettlement(game, topology),
         dice: game?.dice ?? null,
         error: gameError || null,
         interactionMode,
@@ -200,6 +217,19 @@ function App() {
       beginInteraction: setRequestedMode,
       cancelInteraction,
       selectTarget: handleSelectTarget,
+      giveResources: (playerId, resources) => {
+        setGame((current) => {
+          if (!current) return current;
+          const next = structuredClone(current);
+          const player = next.players.find((item) => item.id === playerId);
+          if (!player) return current;
+          Object.entries(resources).forEach(([resource, amount]) => {
+            player.resources[resource] += amount;
+            next.bank[resource] -= amount;
+          });
+          return next;
+        });
+      },
       rollDice: (dice) => {
         if (game?.phase !== 'roll') {
           return;
@@ -219,6 +249,7 @@ function App() {
   }, [
     actionFeedback,
     board.seed,
+    buildAvailability,
     cancelInteraction,
     confirmedPlayers,
     dispatch,
@@ -233,6 +264,8 @@ function App() {
     placementOptions.settlements,
     placements.roads.length,
     placements.settlements.length,
+    placements.cities.length,
+    playerInventories,
   ]);
 
   const actionPhase = game?.phase === 'action';
@@ -362,27 +395,36 @@ function App() {
             <>
               <button
                 type="button"
-                className="secondary-button"
+                className={interactionMode === INTERACTION_MODES.PLACE_ROAD ? 'secondary-button build-button selected' : 'secondary-button build-button'}
                 data-testid="build-road"
                 onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_ROAD)}
+                disabled={!buildAvailability.road.enabled}
+                title={buildAvailability.road.reason || 'Build a road'}
               >
-                Build Road
+                <strong>Build Road</strong>
+                <span>{formatCost(buildAvailability.road.cost)} · {buildAvailability.road.remaining} left</span>
               </button>
               <button
                 type="button"
-                className="secondary-button"
+                className={interactionMode === INTERACTION_MODES.PLACE_SETTLEMENT ? 'secondary-button build-button selected' : 'secondary-button build-button'}
                 data-testid="build-settlement"
                 onClick={() => setRequestedMode(INTERACTION_MODES.PLACE_SETTLEMENT)}
+                disabled={!buildAvailability.settlement.enabled}
+                title={buildAvailability.settlement.reason || 'Build a settlement'}
               >
-                Build Settlement
+                <strong>Build Settlement</strong>
+                <span>{formatCost(buildAvailability.settlement.cost)} · {buildAvailability.settlement.remaining} left</span>
               </button>
               <button
                 type="button"
-                className="secondary-button"
+                className={interactionMode === INTERACTION_MODES.BUILD_CITY ? 'secondary-button build-button selected' : 'secondary-button build-button'}
                 data-testid="build-city"
                 onClick={() => setRequestedMode(INTERACTION_MODES.BUILD_CITY)}
+                disabled={!buildAvailability.city.enabled}
+                title={buildAvailability.city.reason || 'Build a city'}
               >
-                Build City
+                <strong>Build City</strong>
+                <span>{formatCost(buildAvailability.city.cost)} · {buildAvailability.city.remaining} left</span>
               </button>
             </>
           )}

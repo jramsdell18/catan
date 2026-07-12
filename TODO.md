@@ -70,15 +70,15 @@ The UI never changes authoritative game values directly; every game change is an
 
 ## Milestone 3: Normal building and city rendering
 
-- [ ] Add Build Road, Build Settlement, and Build City controls.
-- [ ] Show the resource cost beside each build action.
-- [ ] Disable build actions when the player cannot afford them or has no pieces left.
-- [ ] Highlight legal road and settlement locations during the action phase.
-- [ ] Highlight owned settlements eligible for a city upgrade.
-- [ ] Render cities distinctly from settlements.
-- [ ] Support multiple build actions before ending the turn.
-- [ ] Display clear engine validation errors for illegal placement or payment.
-- [ ] Add UI integration tests for roads, settlements, cities, costs, and piece inventory.
+- [x] Add Build Road, Build Settlement, and Build City controls.
+- [x] Show the resource cost beside each build action.
+- [x] Disable build actions when the player cannot afford them or has no pieces left.
+- [x] Highlight legal road and settlement locations during the action phase.
+- [x] Highlight owned settlements eligible for a city upgrade.
+- [x] Render cities distinctly from settlements.
+- [x] Support multiple build actions before ending the turn.
+- [x] Display clear engine validation errors for illegal placement or payment.
+- [x] Add UI integration tests for roads, settlements, cities, costs, and piece inventory.
 
 ### Done when
 

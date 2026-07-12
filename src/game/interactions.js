@@ -1,4 +1,5 @@
 import { canPlaceRoad, canPlaceSettlement } from '../rules/index.js';
+import { BUILDING_COSTS } from '../rules/constants.js';
 
 export const INTERACTION_MODES = Object.freeze({
   PLACE_ROAD: 'placeRoad',
@@ -99,4 +100,57 @@ export function describeAction(type) {
 export function describeLogEntry(entry, players) {
   const player = players.find((item) => item.id === entry.playerId);
   return `${player?.name ?? player?.label ?? 'Game'} ${describeAction(entry.type)}.`;
+}
+
+export function canAfford(resources, cost) {
+  return Object.entries(cost).every(([resource, amount]) => (resources?.[resource] ?? 0) >= amount);
+}
+
+export function getBuildAvailability(game, targetCounts = {}) {
+  const player = game?.players.find((item) => item.id === game.currentPlayerId);
+  const isActionPhase = game?.phase === 'action';
+  const availability = (pieceKey, cost, targetKey) => {
+    const remaining = player?.pieces[pieceKey] ?? 0;
+    const affordable = canAfford(player?.resources, cost);
+    const hasTarget = (targetCounts[targetKey] ?? 1) > 0;
+    let reason = '';
+    if (!isActionPhase) reason = 'Available during the action phase.';
+    else if (remaining < 1) reason = `No ${targetKey} pieces remaining.`;
+    else if (!affordable) reason = `Requires ${formatCost(cost)}.`;
+    else if (!hasTarget) reason = `No legal ${targetKey} locations are available.`;
+    return { enabled: Boolean(isActionPhase && remaining > 0 && affordable && hasTarget), cost, remaining, reason };
+  };
+  return {
+    road: availability('roads', BUILDING_COSTS.road, 'road'),
+    settlement: availability('settlements', BUILDING_COSTS.settlement, 'settlement'),
+    city: availability('cities', BUILDING_COSTS.city, 'city'),
+  };
+}
+
+export function formatCost(cost) {
+  return Object.entries(cost).map(([resource, amount]) => `${amount} ${resource}`).join(' + ');
+}
+
+export function findRoadPlanToSettlement(game, topology, maxRoads = 6) {
+  if (!game || game.phase !== 'action') return [];
+  const playerId = game.currentPlayerId;
+
+  function search(board, path) {
+    const canBuildNow = topology.vertices.some((vertex) =>
+      canPlaceSettlement(board, vertex.id, playerId, true),
+    );
+    if (canBuildNow) return path;
+    if (path.length >= maxRoads) return null;
+
+    const candidates = topology.edges.filter((edge) => canPlaceRoad(board, edge.id, playerId));
+    for (const edge of candidates) {
+      const nextBoard = structuredClone(board);
+      nextBoard.edges[edge.id].road = playerId;
+      const result = search(nextBoard, [...path, edge.id]);
+      if (result) return result;
+    }
+    return null;
+  }
+
+  return search(game.board, []) ?? [];
 }
