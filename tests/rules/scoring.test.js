@@ -1,8 +1,16 @@
+/**
+ * Focused engine scoring tests (M7): branching/loops/blocking, award transfers, hidden VP.
+ *
+ * Run:  npx vitest run tests/rules/scoring.test.js
+ */
 import { describe, expect, it } from 'vitest';
 import {
+  getScoreBreakdown,
   hasWon,
   longestRoadLength,
+  publicVictoryPoints,
   recalculateAwards,
+  victoryPointCardCount,
   visibleVictoryPoints,
 } from '../../src/rules/index.js';
 import { buildFixtureBoard, THREE_PLAYERS } from './fixtures.js';
@@ -21,6 +29,12 @@ function baseState(boardOverrides = (board) => board) {
     longestRoadPlayerId: null,
     largestArmyPlayerId: null,
   };
+}
+
+/** Add a chord edge so the path board can form branches and loops. */
+function withExtraEdge(board, id, a, b) {
+  board.edges[id] = { id, intersections: [a, b], road: null };
+  return board;
 }
 
 describe('longestRoadLength', () => {
@@ -48,10 +62,54 @@ describe('longestRoadLength', () => {
     expect(longestRoadLength(board, 'p1')).toBe(3);
     expect(longestRoadLength(board, 'p1')).toBeLessThan(5);
   });
+
+  it('uses the longest branch rather than summing all branches', () => {
+    const board = withExtraEdge(buildFixtureBoard(), 'e-branch', 'v2', 'v10');
+    // Connected Y: e0–e4, e-branch, e10–e12. Longest trail is
+    // e4–e3–e2–e-branch–e10–e11–e12 (7), not the sum of every edge.
+    for (const id of ['e0', 'e1', 'e2', 'e3', 'e4', 'e-branch', 'e10', 'e11', 'e12']) {
+      board.edges[id].road = 'p1';
+    }
+    expect(longestRoadLength(board, 'p1')).toBe(7);
+    expect(longestRoadLength(board, 'p1')).toBeLessThan(9);
+  });
+
+  it('counts a closed loop using each edge at most once', () => {
+    const board = withExtraEdge(buildFixtureBoard(), 'e-chord', 'v0', 'v3');
+    // Triangle-ish path v0-e0-v1-e1-v2-e2-v3-e-chord-v0 → 4 edges
+    for (const id of ['e0', 'e1', 'e2', 'e-chord']) {
+      board.edges[id].road = 'p1';
+    }
+    expect(longestRoadLength(board, 'p1')).toBe(4);
+  });
+
+  it('takes the longer of two disconnected road segments', () => {
+    const board = buildFixtureBoard();
+    for (const id of ['e0', 'e1']) board.edges[id].road = 'p1'; // length 2
+    for (const id of ['e10', 'e11', 'e12', 'e13']) board.edges[id].road = 'p1'; // length 4
+    expect(longestRoadLength(board, 'p1')).toBe(4);
+  });
+
+  it('blocks a continuous chain when an opponent city sits mid-path', () => {
+    const board = buildFixtureBoard();
+    for (const id of ['e0', 'e1', 'e2', 'e3', 'e4', 'e5']) {
+      board.edges[id].road = 'p1';
+    }
+    board.intersections.v3.building = { type: 'city', playerId: 'p2' };
+    // Segments: e0–e2 (3 edges via starts) and e3–e5 (3). Max 3.
+    expect(longestRoadLength(board, 'p1')).toBe(3);
+  });
+
+  it('does not count opponent roads as part of the chain', () => {
+    const board = buildFixtureBoard();
+    for (const id of ['e0', 'e1', 'e2']) board.edges[id].road = 'p1';
+    board.edges.e3.road = 'p2';
+    board.edges.e4.road = 'p1';
+    expect(longestRoadLength(board, 'p1')).toBe(3);
+  });
 });
 
-
-describe('recalculateAwards', () => {
+describe('recalculateAwards — longest road transfers', () => {
   it('awards longest road at length 5 with a sole leader', () => {
     const state = baseState((board) => {
       for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1';
@@ -71,7 +129,6 @@ describe('recalculateAwards', () => {
   });
 
   it('keeps longest road on a tie if the holder is still a leader', () => {
-    // Engine only clears the award when the current holder is no longer among max leaders.
     const state = baseState((board) => {
       for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1';
       for (const id of ['e10', 'e11', 'e12', 'e13', 'e14']) board.edges[id].road = 'p2';
@@ -82,18 +139,33 @@ describe('recalculateAwards', () => {
     expect(state.longestRoadPlayerId).toBe('p1');
   });
 
-  it('clears longest road when the holder is no longer a leader', () => {
+  it('transfers longest road when another player strictly exceeds the holder', () => {
     const state = baseState((board) => {
-      for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1';
-      for (const id of ['e9', 'e10', 'e11', 'e12', 'e13', 'e14']) board.edges[id].road = 'p2';
+      for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1'; // 5
+      for (const id of ['e8', 'e9', 'e10', 'e11', 'e12', 'e13']) board.edges[id].road = 'p2'; // 6
       return board;
     });
     state.longestRoadPlayerId = 'p1';
     recalculateAwards(state);
     expect(state.longestRoadPlayerId).toBe('p2');
+    expect(longestRoadLength(state.board, 'p2')).toBe(6);
   });
 
+  it('clears longest road when the holder is broken by a block and no sole leader remains', () => {
+    const state = baseState((board) => {
+      for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1';
+      return board;
+    });
+    state.longestRoadPlayerId = 'p1';
+    // Block splits p1 under 5; p2 has nothing.
+    state.board.intersections.v2.building = { type: 'settlement', playerId: 'p2' };
+    recalculateAwards(state);
+    expect(longestRoadLength(state.board, 'p1')).toBeLessThan(5);
+    expect(state.longestRoadPlayerId).toBeNull();
+  });
+});
 
+describe('recalculateAwards — largest army transfers', () => {
   it('awards largest army at 3 knights with a sole leader', () => {
     const state = baseState();
     state.players[0].playedKnights = 3;
@@ -107,9 +179,40 @@ describe('recalculateAwards', () => {
     recalculateAwards(state);
     expect(state.largestArmyPlayerId).toBeNull();
   });
+
+  it('transfers largest army when another player plays more knights', () => {
+    const state = baseState();
+    state.players[0].playedKnights = 3;
+    state.largestArmyPlayerId = 'p1';
+    recalculateAwards(state);
+    expect(state.largestArmyPlayerId).toBe('p1');
+
+    state.players[1].playedKnights = 4;
+    recalculateAwards(state);
+    expect(state.largestArmyPlayerId).toBe('p2');
+  });
+
+  it('keeps largest army on a tie if the holder is still tied for the lead', () => {
+    const state = baseState();
+    state.players[0].playedKnights = 3;
+    state.players[1].playedKnights = 3;
+    state.largestArmyPlayerId = 'p1';
+    recalculateAwards(state);
+    expect(state.largestArmyPlayerId).toBe('p1');
+  });
+
+  it('clears largest army when the holder is no longer among leaders', () => {
+    const state = baseState();
+    state.players[0].playedKnights = 3;
+    state.largestArmyPlayerId = 'p1';
+    state.players[0].playedKnights = 2;
+    state.players[1].playedKnights = 3;
+    recalculateAwards(state);
+    expect(state.largestArmyPlayerId).toBe('p2');
+  });
 });
 
-describe('visibleVictoryPoints / hasWon', () => {
+describe('score breakdown and hidden victory points', () => {
   it('scores settlements as 1 and cities as 2', () => {
     const state = baseState((board) => {
       board.intersections.v0.building = { type: 'settlement', playerId: 'p1' };
@@ -117,9 +220,18 @@ describe('visibleVictoryPoints / hasWon', () => {
       return board;
     });
     expect(visibleVictoryPoints(state, 'p1')).toBe(3);
+    expect(getScoreBreakdown(state, 'p1')).toMatchObject({
+      settlements: 1,
+      cities: 1,
+      settlementPoints: 1,
+      cityPoints: 2,
+      publicTotal: 3,
+      privateTotal: 3,
+      victoryPointCards: 0,
+    });
   });
 
-  it('includes longest road, largest army, and VP cards', () => {
+  it('keeps victory-point cards out of public totals but in private totals', () => {
     const state = baseState((board) => {
       board.intersections.v0.building = { type: 'settlement', playerId: 'p1' };
       return board;
@@ -129,20 +241,50 @@ describe('visibleVictoryPoints / hasWon', () => {
     state.players[0].developmentCards = [
       { type: 'victoryPoint', boughtTurn: 0 },
       { type: 'victoryPoint', boughtTurn: 0 },
+      { type: 'knight', boughtTurn: 0 },
     ];
-    // 1 settlement + 2 LR + 2 LA + 2 VP cards = 7
+
+    // 1 settlement + 2 LR + 2 LA = 5 public; +2 VP cards = 7 private
+    expect(publicVictoryPoints(state, 'p1')).toBe(5);
     expect(visibleVictoryPoints(state, 'p1')).toBe(7);
+    expect(victoryPointCardCount(state, 'p1')).toBe(2);
+    expect(getScoreBreakdown(state, 'p1')).toMatchObject({
+      publicTotal: 5,
+      privateTotal: 7,
+      victoryPointCards: 2,
+      longestRoad: 2,
+      largestArmy: 2,
+    });
   });
 
-  it('wins only on own turn at 10+ points', () => {
+  it('does not credit opponents for another players victory-point cards', () => {
     const state = baseState((board) => {
-      // 5 cities = 10 VP
-      for (const id of ['v0', 'v2', 'v4', 'v6', 'v8']) {
+      board.intersections.v0.building = { type: 'settlement', playerId: 'p1' };
+      board.intersections.v4.building = { type: 'settlement', playerId: 'p2' };
+      return board;
+    });
+    state.players[0].developmentCards = [{ type: 'victoryPoint', boughtTurn: 0 }];
+    expect(publicVictoryPoints(state, 'p1')).toBe(1);
+    expect(visibleVictoryPoints(state, 'p1')).toBe(2);
+    expect(publicVictoryPoints(state, 'p2')).toBe(1);
+    expect(visibleVictoryPoints(state, 'p2')).toBe(1);
+  });
+
+  it('wins only on own turn at 10+ points including hidden VP cards', () => {
+    const state = baseState((board) => {
+      // 4 cities = 8 public + 2 VP cards = 10 private
+      for (const id of ['v0', 'v2', 'v4', 'v6']) {
         board.intersections[id].building = { type: 'city', playerId: 'p1' };
       }
       return board;
     });
+    state.players[0].developmentCards = [
+      { type: 'victoryPoint', boughtTurn: 0 },
+      { type: 'victoryPoint', boughtTurn: 0 },
+    ];
     state.currentPlayerId = 'p1';
+    expect(publicVictoryPoints(state, 'p1')).toBe(8);
+    expect(visibleVictoryPoints(state, 'p1')).toBe(10);
     expect(hasWon(state, 'p1')).toBe(true);
 
     state.currentPlayerId = 'p2';
@@ -161,5 +303,16 @@ describe('visibleVictoryPoints / hasWon', () => {
     state.currentPlayerId = 'p1';
     expect(visibleVictoryPoints(state, 'p1')).toBe(7);
     expect(hasWon(state, 'p1')).toBe(false);
+  });
+
+  it('reports road length on the score breakdown for award UI', () => {
+    const state = baseState((board) => {
+      for (const id of ['e0', 'e1', 'e2', 'e3', 'e4']) board.edges[id].road = 'p1';
+      return board;
+    });
+    recalculateAwards(state);
+    const breakdown = getScoreBreakdown(state, 'p1');
+    expect(breakdown.longestRoadLength).toBe(5);
+    expect(breakdown.longestRoad).toBe(2);
   });
 });

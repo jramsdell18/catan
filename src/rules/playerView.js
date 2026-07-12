@@ -1,26 +1,13 @@
 import { RESOURCE_TYPES } from './constants.js';
-import { visibleVictoryPoints } from './scoring.js';
+import { publicVictoryPoints, visibleVictoryPoints } from './scoring.js';
+
+export { publicVictoryPoints };
 
 const copy = (value) => structuredClone(value);
 
 function totalResources(resources) {
   if (!resources) return 0;
   return RESOURCE_TYPES.reduce((sum, key) => sum + (resources[key] ?? 0), 0);
-}
-
-/**
- * Public victory points visible to every player (no hidden VP cards).
- * Settlements (1), cities (2), Longest Road (2), Largest Army (2).
- */
-export function publicVictoryPoints(state, playerId) {
-  const buildings = Object.values(state.board.intersections).filter(
-    (intersection) => intersection.building?.playerId === playerId,
-  );
-  return (
-    buildings.reduce((sum, intersection) => sum + (intersection.building.type === 'city' ? 2 : 1), 0) +
-    (state.longestRoadPlayerId === playerId ? 2 : 0) +
-    (state.largestArmyPlayerId === playerId ? 2 : 0)
-  );
 }
 
 /**
