@@ -19,21 +19,40 @@ const NUMBER_TOKEN_PIPS = {
   12: 1,
 };
 
-const plasticTexture = new THREE.TextureLoader().load(plasticTextureUrl);
-plasticTexture.colorSpace = THREE.SRGBColorSpace;
-plasticTexture.wrapS = THREE.RepeatWrapping;
-plasticTexture.wrapT = THREE.RepeatWrapping;
-plasticTexture.repeat.set(1.4, 1.4);
-plasticTexture.userData.sharedAsset = true;
+let plasticTexture = null;
+const waitingForPlasticTexture = new Set();
+
+new THREE.TextureLoader().load(plasticTextureUrl, (texture) => {
+  plasticTexture = texture;
+  plasticTexture.colorSpace = THREE.SRGBColorSpace;
+  plasticTexture.wrapS = THREE.RepeatWrapping;
+  plasticTexture.wrapT = THREE.RepeatWrapping;
+  plasticTexture.repeat.set(1.4, 1.4);
+  plasticTexture.userData.sharedAsset = true;
+
+  waitingForPlasticTexture.forEach((material) => {
+    material.map = plasticTexture;
+    material.needsUpdate = true;
+  });
+  waitingForPlasticTexture.clear();
+});
 
 function makeMaterial(color, options = {}) {
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color,
-    map: plasticTexture,
     roughness: 0.72,
     metalness: 0.04,
     ...options,
   });
+
+  if (plasticTexture) {
+    material.map = plasticTexture;
+  } else {
+    waitingForPlasticTexture.add(material);
+    material.addEventListener('dispose', () => waitingForPlasticTexture.delete(material));
+  }
+
+  return material;
 }
 
 function addTileTrim(group, radius) {

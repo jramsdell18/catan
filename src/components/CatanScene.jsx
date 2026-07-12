@@ -245,6 +245,7 @@ function CatanScene({
   onPlaceRoad,
 }) {
   const containerRef = useRef(null);
+  const cameraStateRef = useRef(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -261,12 +262,17 @@ function CatanScene({
     window.__CATAN_RENDER_READY = false;
     window.__CATAN_RENDER_STATS = null;
     window.__CATAN_ACTIVE_RENDER_ID = renderId;
+    let disposed = false;
+    const savedCameraState =
+      cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#dce9ea');
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ alpha: false, antialias: true, preserveDrawingBuffer: true });
+    renderer.setClearColor(scene.background, 1);
+    renderer.setClearAlpha(1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -296,25 +302,67 @@ function CatanScene({
     scene.add(world);
     const interactionTargets = [];
     const animatedHighlights = [];
+    const textureLoader = new THREE.TextureLoader();
+    const requiredSceneTextures = 2;
+    const sceneTextureSettleMs = 1500;
+    let loadedSceneTextures = 0;
+    let sceneTexturesReadyAt = null;
 
-    const woodTexture = new THREE.TextureLoader().load(woodTextureUrl);
-    woodTexture.colorSpace = THREE.SRGBColorSpace;
-    woodTexture.wrapS = THREE.RepeatWrapping;
-    woodTexture.wrapT = THREE.RepeatWrapping;
-    woodTexture.center.set(0.5, 0.5);
-    woodTexture.rotation = Math.PI / 2;
-    woodTexture.repeat.set(1.65, 1.5);
-    woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    function markSceneTextureReady() {
+      loadedSceneTextures += 1;
+      if (loadedSceneTextures >= requiredSceneTextures && sceneTexturesReadyAt === null) {
+        sceneTexturesReadyAt = performance.now();
+      }
+    }
 
-    const plasticTexture = new THREE.TextureLoader().load(plasticTextureUrl);
-    plasticTexture.colorSpace = THREE.SRGBColorSpace;
-    plasticTexture.wrapS = THREE.RepeatWrapping;
-    plasticTexture.wrapT = THREE.RepeatWrapping;
-    plasticTexture.repeat.set(1.2, 1.2);
+    const playerTableMaterial = new THREE.MeshStandardMaterial({ color: '#b88560', roughness: 0.82 });
+    textureLoader.load(
+      woodTextureUrl,
+      (woodTexture) => {
+        if (disposed) {
+          woodTexture.dispose();
+          return;
+        }
+
+        woodTexture.colorSpace = THREE.SRGBColorSpace;
+        woodTexture.wrapS = THREE.RepeatWrapping;
+        woodTexture.wrapT = THREE.RepeatWrapping;
+        woodTexture.center.set(0.5, 0.5);
+        woodTexture.rotation = Math.PI / 2;
+        woodTexture.repeat.set(1.65, 1.5);
+        woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        playerTableMaterial.map = woodTexture;
+        playerTableMaterial.needsUpdate = true;
+        markSceneTextureReady();
+      },
+      undefined,
+      markSceneTextureReady,
+    );
+
+    const boardTableMaterial = new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 });
+    textureLoader.load(
+      plasticTextureUrl,
+      (plasticTexture) => {
+        if (disposed) {
+          plasticTexture.dispose();
+          return;
+        }
+
+        plasticTexture.colorSpace = THREE.SRGBColorSpace;
+        plasticTexture.wrapS = THREE.RepeatWrapping;
+        plasticTexture.wrapT = THREE.RepeatWrapping;
+        plasticTexture.repeat.set(1.2, 1.2);
+        boardTableMaterial.map = plasticTexture;
+        boardTableMaterial.needsUpdate = true;
+        markSceneTextureReady();
+      },
+      undefined,
+      markSceneTextureReady,
+    );
 
     const playerTable = new THREE.Mesh(
       new THREE.BoxGeometry(57, 0.12, 51),
-      new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.82 }),
+      playerTableMaterial,
     );
     playerTable.position.y = -0.28;
     playerTable.receiveShadow = true;
@@ -322,7 +370,7 @@ function CatanScene({
 
     const boardTable = new THREE.Mesh(
       new THREE.CylinderGeometry(5.8, 5.8, 0.2, 6),
-      new THREE.MeshStandardMaterial({ color: '#1f6f78', map: plasticTexture, roughness: 0.8 }),
+      boardTableMaterial,
     );
     boardTable.rotation.y = Math.PI / 6;
     boardTable.position.y = -0.02;
@@ -341,6 +389,8 @@ function CatanScene({
       worldChildren: world.children.length,
     };
 
+    let hasInitializedCamera = false;
+
     function resize() {
       const { width, height } = container.getBoundingClientRect();
       const safeWidth = Math.max(width, 1);
@@ -350,9 +400,18 @@ function CatanScene({
       camera.updateProjectionMatrix();
       renderer.setSize(safeWidth, safeHeight, false);
 
-      const isNarrow = safeWidth < 560;
-      camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
-      camera.lookAt(controls.target);
+      if (!hasInitializedCamera) {
+        if (savedCameraState) {
+          camera.position.copy(savedCameraState.position);
+          controls.target.copy(savedCameraState.target);
+        } else {
+          const isNarrow = safeWidth < 560;
+          controls.target.set(0, 0.2, 0.3);
+          camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
+          camera.lookAt(controls.target);
+        }
+        hasInitializedCamera = true;
+      }
       controls.update();
     }
 
@@ -408,7 +467,10 @@ function CatanScene({
       controls.update();
       renderer.render(scene, camera);
       renderedFrames += 1;
-      window.__CATAN_RENDER_READY = true;
+      window.__CATAN_RENDER_READY =
+        sceneTexturesReadyAt !== null &&
+        performance.now() - sceneTexturesReadyAt > sceneTextureSettleMs &&
+        renderedFrames >= 2;
       window.__CATAN_RENDER_STATS = {
         renderId,
         frames: renderedFrames,
@@ -426,6 +488,12 @@ function CatanScene({
     animate();
 
     return () => {
+      cameraStateRef.current = {
+        cameraResetKey,
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+      };
+      disposed = true;
       window.cancelAnimationFrame(animationId);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       resizeObserver.disconnect();

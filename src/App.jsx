@@ -1,23 +1,23 @@
 import { useCallback, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
-import PlayerSetup from './components/PlayerSetup.jsx';
 import { createRandomBoard } from './game/board.js';
-import { createPlayerInventories, getActivePlayers, PLAYER_PIECE_TYPES } from './game/pieces.js';
+import { createPlayerInventories, getActivePlayers } from './game/pieces.js';
 import { createRulesBoard, placementsFromGame, resourceHandsFromGame } from './game/rulesAdapter.js';
 import { createBoardTopology } from './game/topology.js';
 import { applyAction, canPlaceRoad, canPlaceSettlement, createGame } from './rules/index.js';
 
 const DEFAULT_PLAYER_COUNT = 4;
+const PLAYER_COUNT_OPTIONS = [3, 4];
 
 function App() {
   const [selectedPlayers, setSelectedPlayers] = useState(DEFAULT_PLAYER_COUNT);
   const [confirmedPlayers, setConfirmedPlayers] = useState(null);
-  const [board, setBoard] = useState(() => createRandomBoard());
+  const [board] = useState(() => createRandomBoard());
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [game, setGame] = useState(null);
   const [gameError, setGameError] = useState('');
 
-  const activePlayerCount = confirmedPlayers ?? selectedPlayers;
+  const activePlayerCount = game ? confirmedPlayers ?? selectedPlayers : selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
   const topology = useMemo(() => createBoardTopology(board.hexes), [board.hexes]);
   const placements = useMemo(() => placementsFromGame(game), [game]);
@@ -29,20 +29,17 @@ function App() {
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
 
   const playerMessage = useMemo(() => {
-    if (!confirmedPlayers) {
-      return 'Choose a player count to start the room setup.';
-    }
-    if (!game) return `${confirmedPlayers} players selected. Start the game when ready.`;
+    if (!game) return 'Select players and start the table.';
     if (game.phase === 'setup') {
       return `${currentPlayer?.label ?? 'Current player'} places a ${game.setupSettlementId ? 'road' : 'settlement'}.`;
     }
-    if (game.phase === 'roll') return `${currentPlayer?.label} rolls the dice.`;
-    if (game.phase === 'robber') return `${currentPlayer?.label} must move the robber (UI coming next).`;
-    if (game.phase === 'discard') return 'Players with more than seven cards must discard (UI coming next).';
+    if (game.phase === 'roll') return `${currentPlayer?.label ?? 'Current player'} rolls the dice.`;
+    if (game.phase === 'robber') return `${currentPlayer?.label ?? 'Current player'} must move the robber.`;
+    if (game.phase === 'discard') return 'Players with more than seven cards must discard.';
     if (game.phase === 'gameOver') return `${currentPlayer?.label ?? 'A player'} won the game.`;
-    if (game.phase === 'action') return `${currentPlayer?.label} may build, trade, or end the turn.`;
-    return `${confirmedPlayers} players selected. Start the game to choose the first player.`;
-  }, [confirmedPlayers, currentPlayer, game]);
+    if (game.phase === 'action') return `${currentPlayer?.label ?? 'Current player'} may build, trade, or end the turn.`;
+    return 'Game started.';
+  }, [currentPlayer, game]);
 
   const placementOptions = useMemo(() => {
     if (!game || game.phase !== 'setup') {
@@ -78,26 +75,15 @@ function App() {
     });
   }, []);
 
-  function handleConfirm(event) {
-    event.preventDefault();
-    setConfirmedPlayers(selectedPlayers);
-    setGame(null);
-    setGameError('');
-  }
-
-  function handleRandomizeBoard() {
-    setBoard(createRandomBoard());
-    setGame(null);
-    setGameError('');
-  }
-
   function handleResetCamera() {
     setCameraResetKey((key) => key + 1);
   }
 
   function handleStartGame() {
-    const players = getActivePlayers(confirmedPlayers ?? selectedPlayers);
+    const playerCount = selectedPlayers;
+    const players = getActivePlayers(playerCount);
     const rulesBoard = createRulesBoard(board, topology);
+    setConfirmedPlayers(playerCount);
     setGame(createGame({
       board: rulesBoard,
       players: players.map((player) => ({ ...player, name: player.label })),
@@ -123,81 +109,12 @@ function App() {
     [dispatch, game],
   );
 
+  const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
+  const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
+
   return (
     <main className="app-shell">
-      <section className="setup-section" aria-labelledby="setup-title">
-        <div className="setup-copy">
-          <p className="eyebrow">Catan Multiplayer</p>
-          <h1 id="setup-title">3D board sandbox</h1>
-          <p className="intro">
-            Pick the number of players, randomize the starting island, and inspect the first 3D
-            piece definitions for a future multiplayer board.
-          </p>
-        </div>
-
-        <PlayerSetup
-          selectedPlayers={selectedPlayers}
-          confirmedPlayers={confirmedPlayers}
-          onChangePlayers={setSelectedPlayers}
-          onConfirm={handleConfirm}
-        />
-
-        <div className="debug-actions" aria-label="Board debug controls">
-          <button type="button" onClick={handleRandomizeBoard}>
-            Randomize Board
-          </button>
-          <button type="button" className="secondary-button" onClick={handleResetCamera}>
-            Reset Camera
-          </button>
-          <button type="button" onClick={handleStartGame} disabled={!confirmedPlayers}>
-            {game ? 'Restart Game' : 'Start Game'}
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'rollDice', playerId: game.currentPlayerId })}
-            disabled={game?.phase !== 'roll'}
-          >
-            Roll Dice
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
-            disabled={game?.phase !== 'action'}
-          >
-            End Turn
-          </button>
-        </div>
-
-        <div className="status-panel">
-          <p className="status-label">Room setup</p>
-          <p className="status-message">{playerMessage}</p>
-          {game && <p className="helper-text">Engine phase: {game.phase}</p>}
-          {game?.dice && <p className="helper-text">Last roll: {game.dice.join(' + ')} = {game.dice[0] + game.dice[1]}</p>}
-          {gameError && <p className="game-error" role="alert">{gameError}</p>}
-        </div>
-
-        {game && (
-          <div className="player-state-list" aria-label="Player resources">
-            {game.players.map((player) => (
-              <div className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'} key={player.id}>
-                <strong>{player.name}</strong>
-                <span>{Object.entries(player.resources).map(([resource, count]) => `${resource}: ${count}`).join(' · ')}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="inventory-grid" aria-label="Catan piece inventory">
-          {Object.values(PLAYER_PIECE_TYPES).map((piece) => (
-            <div key={piece.id} className="inventory-item">
-              <span>{piece.label}</span>
-              <strong>{piece.maxPerPlayer} each</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="game-space" aria-label="Current 3D game setup">
+      <section className="game-stage" aria-label="3D Catan table">
         <CatanScene
           board={board}
           activePlayers={activePlayers}
@@ -211,26 +128,84 @@ function App() {
           onPlaceRoad={handlePlaceRoad}
         />
 
-        <div className="board-debug">
-          <div>
-            <p className="status-label">Board seed</p>
-            <p className="seed-value">{board.seed}</p>
+        {!game && (
+          <div className="start-overlay" aria-labelledby="start-title">
+            <p className="eyebrow">Catan Multiplayer</p>
+            <h1 id="start-title">Start Game</h1>
+            <div className="start-controls">
+              <label htmlFor="player-count">Players</label>
+              <select
+                id="player-count"
+                value={selectedPlayers}
+                onChange={(event) => setSelectedPlayers(Number(event.target.value))}
+              >
+                {PLAYER_COUNT_OPTIONS.map((count) => (
+                  <option key={count} value={count}>
+                    {count} players
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={handleStartGame}>
+                Start Game
+              </button>
+            </div>
           </div>
-          {game && (
-            <div>
-              <p className="status-label">Current player</p>
-              <p className="seed-value">{currentPlayer?.label}</p>
-            </div>
+        )}
+      </section>
+
+      <section className="game-control-panel" aria-label="Game controls">
+        <div className="turn-summary">
+          <p className="status-label">{game ? `Phase: ${game.phase}` : 'Ready'}</p>
+          <p className="status-message">{playerMessage}</p>
+          {game?.dice && (
+            <p className="helper-text">
+              Last roll: {game.dice.join(' + ')} = {diceTotal}
+            </p>
           )}
-          {game && (
-            <div>
-              <p className="status-label">Cards in play</p>
-              <p className="seed-value">
-                {resourceHands.reduce((total, hand) => total + hand.cards.length, 0)}
-              </p>
-            </div>
-          )}
+          {game && <p className="helper-text">Cards in play: {totalCards}</p>}
+          {gameError && <p className="game-error" role="alert">{gameError}</p>}
         </div>
+
+        <div className="control-actions">
+          <button
+            type="button"
+            onClick={() => game && dispatch({ type: 'rollDice', playerId: game.currentPlayerId })}
+            disabled={game?.phase !== 'roll'}
+          >
+            Roll Dice
+          </button>
+          <button
+            type="button"
+            onClick={() => game && dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
+            disabled={game?.phase !== 'action'}
+          >
+            End Turn
+          </button>
+          <button type="button" className="secondary-button" onClick={handleResetCamera}>
+            Reset Camera
+          </button>
+          <button type="button" className="secondary-button" onClick={handleStartGame}>
+            {game ? 'Restart Game' : 'Start Game'}
+          </button>
+        </div>
+
+        {game && (
+          <div className="resource-strip" aria-label="Player resources">
+            {game.players.map((player) => (
+              <div
+                className={player.id === game.currentPlayerId ? 'player-state active' : 'player-state'}
+                key={player.id}
+              >
+                <strong>{player.name}</strong>
+                <span>
+                  {Object.entries(player.resources)
+                    .map(([resource, count]) => `${resource}: ${count}`)
+                    .join(' | ')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );
