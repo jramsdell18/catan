@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6f78" />
+    <title>Catan Table Call</title>
+    <link rel="stylesheet" href="./stream.css" />
+    <script src="https://meet.jit.si/external_api.js"></script>
+    <script type="module" src="./stream.js"></script>
+  </head>
+  <body>
+    <main class="stream-shell">
+      <section class="join-panel" id="joinPanel" aria-labelledby="joinTitle">
+        <p class="eyebrow">Catan voice and video</p>
+        <h1 id="joinTitle">Join the table call</h1>
+
+        <form class="join-form" id="joinForm">
+          <label for="displayName">Name</label>
+          <div class="join-row">
+            <input
+              id="displayName"
+              name="displayName"
+              type="text"
+              autocomplete="name"
+              placeholder="Your name"
+              maxlength="40"
+              required
+            />
+            <button type="submit">Join call</button>
+          </div>
+        </form>
+
+        <div class="invite-box">
+          <label for="inviteLink">Invite link</label>
+          <div class="invite-row">
+            <input id="inviteLink" type="text" readonly />
+            <button type="button" id="copyInvite">Copy</button>
+          </div>
+          <p class="status-text" id="copyStatus" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="call-panel" id="callPanel" aria-labelledby="callTitle" hidden>
+        <header class="call-header">
+          <div>
+            <p class="eyebrow">Live room</p>
+            <h2 id="callTitle">Table call</h2>
+          </div>
+          <div class="call-actions">
+            <button type="button" id="copyInviteActive">Copy invite</button>
+            <button type="button" class="secondary-button" id="leaveCall">Leave</button>
+          </div>
+        </header>
+
+        <div class="meet-frame" id="meetFrame" aria-label="Jitsi video call"></div>
+      </section>
+    </main>
+  </body>
+</html>
