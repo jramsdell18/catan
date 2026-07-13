@@ -181,8 +181,11 @@ Goal: **full engine state is never the multiplayer wire format.** One seat sees 
 
 - [x] Derive seat UI from `usePlayerView` / `getPlayerView` for hands and private outcomes (`ResourceStrip`, `RollOutcome`, scoreboard private total).
 - [x] Keep `applyAction` on **full** authoritative state (view is display-only; never the rules source of truth).
-- [ ] Audit remaining UI so no component reads `game.players[*].resources` or `.developmentCards` for **non-viewer** seats when rendering (discard forms for the acting seat may still use full state on a shared device until true multi-client).
-- [ ] Treat “send `getPlayerView` per connected seat” as the required multiplayer transport rule when M10/M11 start (no full-state broadcast).
+- [x] Audit remaining UI so private hands are not rendered for non-viewer seats in multiplayer mode (`sharedDeviceMode=false`). Local hot-seat keeps `sharedDeviceMode=true` for discard/trade forms.
+- [x] Face-down 3D racks use count-only cards for non-viewer seats when a playerView is present.
+- [x] Trade accept UI in multiplayer mode only probes the local seat’s resources.
+- [x] Development panel uses seat view for card list / affordability and deck **count** only.
+- [x] Treat “send `getPlayerView` per connected seat” as the required multiplayer transport rule when M10/M11 start (no full-state broadcast).
 
 ### Explicitly out of scope for M8 (see Future milestone)
 
@@ -195,8 +198,9 @@ Goal: **full engine state is never the multiplayer wire format.** One seat sees 
 - [x] A single function defines what one player is allowed to know.
 - [x] Tests lock the non-leak guarantees for hands, VP cards, and deck.
 - [x] The local client already demonstrates view-based rendering for the main private surfaces.
-- [ ] Remaining UI audit complete (checkbox above).
-- [ ] Multiplayer milestones reference this boundary instead of inventing a second sanitizer.
+- [x] Remaining UI audit complete (checkbox above).
+- [x] Multiplayer milestones reference this boundary instead of inventing a second sanitizer.
+
 
 ## Milestone 9: Local release quality
 
