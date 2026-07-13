@@ -1,17 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Room, RoomEvent, Track, VideoPresets } from 'livekit-client';
+import { getOrCreateParticipantId } from '../game/multiplayerRoom.js';
 
 const ROOM_PREFIX = 'catan-table-';
 const ROOM_ID_LENGTH = 12;
 const DISPLAY_NAME_KEY = 'catanLiveKitDisplayName';
 const PLAYER_ID_KEY = 'catanLiveKitPlayerId';
+const HOST_ROOM_KEY = 'catanLiveKitHostRoom';
+const DATA_TOPIC = 'catan-game';
 const TOKEN_ENDPOINT =
   import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT || '/.netlify/functions/livekit-token';
 
-function LiveKitTableCall({ players }) {
+function LiveKitTableCall({
+  players,
+  claimedPlayerIds = [],
+  outboundMessage = null,
+  onDataMessage,
+  onLocalParticipantChange,
+  onParticipantPresenceChange,
+}) {
   const roomRef = useRef(null);
   const cleanupRoomEventsRef = useRef(null);
   const audioHostRef = useRef(null);
+  const sentOutboundIdRef = useRef(null);
+  const onDataMessageRef = useRef(onDataMessage);
+  const onLocalParticipantChangeRef = useRef(onLocalParticipantChange);
+  const onParticipantPresenceChangeRef = useRef(onParticipantPresenceChange);
+  const participantId = useMemo(() => getOrCreateParticipantId(), []);
   const [displayName, setDisplayName] = useState(() => localStorage.getItem(DISPLAY_NAME_KEY) || '');
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
     return localStorage.getItem(PLAYER_ID_KEY) || players[0]?.id || '';
@@ -22,29 +37,64 @@ function LiveKitTableCall({ players }) {
   const [activeSpeakerIds, setActiveSpeakerIds] = useState(() => new Set());
   const [needsAudioStart, setNeedsAudioStart] = useState(false);
 
-  const roomName = useMemo(() => ensureRoomName(), []);
+  const roomInfo = useMemo(() => ensureRoomInfo(), []);
+  const roomName = roomInfo.roomName;
   const inviteUrl = window.location.href;
   const isJoined = connectionState === 'connected';
   const isJoining = connectionState === 'joining';
   const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? players[0];
   const localParticipant = participants.find((participant) => participant.isLocal) ?? null;
   const participantsByPlayerId = useMemo(() => mapParticipantsToPlayers(participants, players), [participants, players]);
+  const claimedPlayerIdSet = useMemo(() => new Set(claimedPlayerIds), [claimedPlayerIds]);
+  const availablePlayers = useMemo(
+    () => players.filter((player) => player.id === selectedPlayerId || !claimedPlayerIdSet.has(player.id)),
+    [claimedPlayerIdSet, players, selectedPlayerId],
+  );
 
   useEffect(() => {
-    if (!players.some((player) => player.id === selectedPlayerId)) {
-      const nextPlayerId = players[0]?.id || '';
+    onDataMessageRef.current = onDataMessage;
+    onLocalParticipantChangeRef.current = onLocalParticipantChange;
+    onParticipantPresenceChangeRef.current = onParticipantPresenceChange;
+  }, [onDataMessage, onLocalParticipantChange, onParticipantPresenceChange]);
+
+  useEffect(() => {
+    onLocalParticipantChangeRef.current?.({
+      connected: isJoined,
+      participantId,
+      displayName: displayName.trim(),
+      playerId: selectedPlayerId || null,
+      roomName,
+      isRoomCreator: roomInfo.isRoomCreator,
+    });
+  }, [displayName, isJoined, participantId, roomInfo.isRoomCreator, roomName, selectedPlayerId]);
+
+  useEffect(() => {
+    if (!availablePlayers.some((player) => player.id === selectedPlayerId)) {
+      const nextPlayerId = availablePlayers[0]?.id || '';
       setSelectedPlayerId(nextPlayerId);
       if (nextPlayerId) {
         localStorage.setItem(PLAYER_ID_KEY, nextPlayerId);
       }
     }
-  }, [players, selectedPlayerId]);
+  }, [availablePlayers, selectedPlayerId]);
 
   useEffect(() => {
     return () => {
       disposeRoom();
     };
   }, []);
+
+  useEffect(() => {
+    if (!outboundMessage || !roomRef.current || connectionState !== 'connected') {
+      return;
+    }
+    if (sentOutboundIdRef.current === outboundMessage.id) {
+      return;
+    }
+
+    sentOutboundIdRef.current = outboundMessage.id;
+    publishDataMessage(roomRef.current, outboundMessage);
+  }, [connectionState, outboundMessage]);
 
   async function handleJoin(event) {
     event.preventDefault();
@@ -69,7 +119,7 @@ function LiveKitTableCall({ players }) {
       const credentials = await fetchLiveKitCredentials({
         roomName,
         participantName: trimmedName,
-        participantIdentity: selectedPlayer.id,
+        participantIdentity: participantId,
         playerId: selectedPlayer.id,
       });
 
@@ -104,6 +154,15 @@ function LiveKitTableCall({ players }) {
         },
         onRemoteAudioSubscribed: (track) => attachAudioTrack(track, audioHostRef.current),
         onRemoteAudioUnsubscribed: (track) => detachAudioTrack(track),
+        onDataReceived: (payload, participant) => {
+          const message = decodeDataMessage(payload);
+          if (message) {
+            onDataMessageRef.current?.(message, {
+              participantId: participant?.identity ?? null,
+              displayName: participant?.name ?? participant?.identity ?? '',
+            });
+          }
+        },
       });
 
       await room.connect(credentials.serverUrl, credentials.participantToken);
@@ -179,10 +238,13 @@ function LiveKitTableCall({ players }) {
   function refreshParticipants(room = roomRef.current) {
     if (!room) {
       setParticipants([]);
+      onParticipantPresenceChangeRef.current?.([]);
       return;
     }
 
-    setParticipants(getRoomParticipants(room));
+    const nextParticipants = getRoomParticipants(room);
+    setParticipants(nextParticipants);
+    onParticipantPresenceChangeRef.current?.(nextParticipants);
   }
 
   function disposeRoom() {
@@ -267,7 +329,7 @@ function LiveKitTableCall({ players }) {
                 value={selectedPlayerId}
                 onChange={(event) => setSelectedPlayerId(event.target.value)}
               >
-                {players.map((player) => (
+                {availablePlayers.map((player) => (
                   <option key={player.id} value={player.id}>
                     {player.label}
                   </option>
@@ -361,6 +423,7 @@ function bindRoomEvents(room, handlers) {
     [RoomEvent.ActiveSpeakersChanged, handlers.onActiveSpeakers],
     [RoomEvent.AudioPlaybackStatusChanged, handlers.onAudioPlaybackStatus],
     [RoomEvent.Disconnected, handlers.onDisconnected],
+    [RoomEvent.DataReceived, handlers.onDataReceived],
   ];
 
   eventHandlers.forEach(([eventName, handler]) => {
@@ -485,7 +548,7 @@ function detachAudioTrack(track) {
   });
 }
 
-function ensureRoomName() {
+function ensureRoomInfo() {
   const params = new URLSearchParams(window.location.search);
   const existingRoom = normalizeRoomName(params.get('room') || '');
 
@@ -495,13 +558,17 @@ function ensureRoomName() {
       window.history.replaceState(null, '', `${window.location.pathname}?${params}`);
     }
 
-    return existingRoom;
+    return {
+      roomName: existingRoom,
+      isRoomCreator: sessionStorage.getItem(HOST_ROOM_KEY) === existingRoom,
+    };
   }
 
   const generatedRoom = `${ROOM_PREFIX}${createRoomId()}`;
   params.set('room', generatedRoom);
   window.history.replaceState(null, '', `${window.location.pathname}?${params}`);
-  return generatedRoom;
+  sessionStorage.setItem(HOST_ROOM_KEY, generatedRoom);
+  return { roomName: generatedRoom, isRoomCreator: true };
 }
 
 function normalizeRoomName(value) {
@@ -543,6 +610,25 @@ function copyTextWithFallback(text) {
   copyTarget.select();
   document.execCommand('copy');
   copyTarget.remove();
+}
+
+function publishDataMessage(room, message) {
+  const payload = new TextEncoder().encode(JSON.stringify(message));
+  room.localParticipant.publishData(payload, {
+    reliable: true,
+    topic: DATA_TOPIC,
+  });
+}
+
+function decodeDataMessage(payload) {
+  try {
+    const text = typeof payload === 'string' ? payload : new TextDecoder().decode(payload);
+    const message = JSON.parse(text);
+    if (!message || message.topic !== DATA_TOPIC || !message.type) return null;
+    return message;
+  } catch {
+    return null;
+  }
 }
 
 export default LiveKitTableCall;

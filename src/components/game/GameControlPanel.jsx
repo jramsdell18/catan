@@ -10,6 +10,7 @@ import TradeControls from './TradeControls.jsx';
 function GameControlPanel(props) {
   const { game, playerView = null } = props;
   const actionPhase = game?.phase === 'action';
+  const canAct = !game || props.isViewerTurn;
   return (
     <section className="game-control-panel" aria-label="Game controls">
       <TurnSummary {...props} />
@@ -23,11 +24,11 @@ function GameControlPanel(props) {
         onChooseDifferentHex={props.onChooseDifferentRobberHex}
       />
       <RollOutcome game={game} playerView={playerView} />
-      <TradeControls game={game} onAction={props.onTradeAction} />
+      {props.isViewerTurn && <TradeControls game={game} onAction={props.onTradeAction} />}
       <div className="control-actions">
-        <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll'}>Roll Dice</button>
-        <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase}>End Turn</button>
-        {actionPhase && (
+        <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll' || !props.isViewerTurn}>Roll Dice</button>
+        <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase || !props.isViewerTurn}>End Turn</button>
+        {actionPhase && props.isViewerTurn && (
           <BuildControls
             interactionMode={props.interactionMode}
             buildAvailability={props.buildAvailability}
@@ -40,11 +41,16 @@ function GameControlPanel(props) {
           className="secondary-button"
           data-testid={game ? 'restart-game' : 'start-game-bottom'}
           onClick={props.onStartGame}
-          disabled={!props.confirmedPlayers}
+          disabled={game ? !props.isHost : !props.canStartGame}
         >
           {game ? 'Restart Game' : 'Start Game'}
         </button>
       </div>
+      {game && !canAct && (
+        <p className="helper-text" data-testid="viewer-role">
+          {props.viewerRole === 'spectator' ? 'Spectating only.' : 'Waiting for your turn.'}
+        </p>
+      )}
       <TableMeta game={game} boardSeed={props.boardSeed} currentPlayer={props.currentPlayer} totalCards={props.totalCards} />
       <ResourceStrip game={game} playerView={playerView} />
       <ActionHistory game={game} />
