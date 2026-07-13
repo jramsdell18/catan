@@ -218,7 +218,26 @@ The local game is understandable, accessible, repeatably testable, and ready to 
 
 ## Milestone 10: Client / hosted UI performance
 
-Make the table feel smooth during play (not just on first load). Tasks are ordered **highest impact first**. Can proceed in parallel with multiplayer work; does **not** depend on a dedicated game server.
+### Recommended execution order
+
+Use this sequence as the authoritative priority order; the categorized inventory below describes the implementation areas.
+
+1. **Measure first.** Record first usable board time, action-to-scene-update time, renderer recreation count, mobile FPS during dice/highlights, transfer size, render calls, and triangle count.
+2. **Set release targets.** Define acceptable first-load and action-update budgets on a representative mid-range phone and desktop.
+3. **Take contained wins.** Compress the approximately 9.4 MB wood and 1.1 MB plastic textures, disable `preserveDrawingBuffer` outside screenshot tests, cap mobile pixel ratio, and reduce mobile shadow cost.
+4. **Refactor the scene as one coordinated project.** Create the renderer/camera/controls once, keep the board layer stable, and update pieces, robber, highlights, racks, and dice independently.
+5. **Remeasure before secondary optimization.** Add on-demand rendering, LiveKit lazy loading, or React memoization only when profiling shows they remain valuable.
+6. **Verify delivery after choosing a host.** CDN headers and Brotli/gzip are deployment checks, not prerequisites for the scene refactor.
+
+Current evidence and scope corrections:
+
+- `CatanScene` recreates the renderer, camera, controls, and full world on ordinary game updates.
+- Shared texture caching is already implemented, so texture network fetch/decode is not repeated. The remaining rebuild cost is renderer, materials, geometry, and scene layers.
+- The incremental scene, stable board, and patchable layer items should be owned as one refactor rather than divided among developers editing `CatanScene.jsx` in parallel.
+- `React.memo` alone will not solve legitimate scene dependency changes.
+- Performance work may proceed in parallel with server work when file ownership stays separated (`CatanScene`/assets versus server/room modules).
+
+Make the table feel smooth during play (not just on first load). The sections below are an implementation inventory; follow the recommended execution order above.
 
 Primary pain today: `CatanScene` rebuilds the entire WebGL world when placements, highlights, dice, or hands change—see `src/components/CatanScene.jsx` effect dependencies.
 
@@ -226,7 +245,8 @@ Primary pain today: `CatanScene` rebuilds the entire WebGL world when placements
 
 - [ ] **Incremental 3D scene updates:** keep one long-lived renderer/scene; update separate groups for hexes, pieces, highlights, racks, and dice instead of dispose+rebuild on every game change.
 - [ ] **Stable board layer:** only rebuild hexes/ports/table when the board seed (or topology) changes; leave pieces/highlights as patchable layers.
-- [ ] **Avoid full texture reload on each rebuild:** cache wood/plastic (and other) textures across updates; do not wait ~1.5s settle after every action.
+- [x] **Cache shared texture loads:** wood/plastic network fetch and decode are reused across scene rebuilds.
+- [ ] **Reuse stable scene materials and remove rebuild settling:** retain shared materials/layers across updates and do not wait ~1.5s after ordinary actions.
 
 ### P1 — load time and mobile FPS
 
@@ -261,6 +281,8 @@ Begin once the local client is stable; can overlap with M10 performance work if 
 - [ ] Run all player commands through server-side `applyAction`.
 - [ ] Reject malformed, stale, unauthorized, and out-of-turn commands.
 - [ ] Add monotonically increasing state/action versions.
+- [ ] Add idempotent command IDs and acknowledgements so retries cannot apply an action twice.
+- [ ] Keep board generation, dice, robber theft, and development-deck order server-authoritative.
 
 ## Milestone 12: Real-time multiplayer and private state
 
@@ -271,6 +293,8 @@ Begin once the local client is stable; can overlap with M10 performance work if 
 - [ ] Reconnect players to the latest state.
 - [ ] Handle disconnects, abandoned games, and host departure.
 - [ ] Add multiplayer tests using multiple simultaneous clients.
+- [ ] Add explicit leave/abandon behavior, reconnect status, and state-snapshot recovery after missed events.
+- [ ] Add a rematch flow that can retain the room and seated players.
 
 ## Milestone 13: Persistence, operations, and security
 
