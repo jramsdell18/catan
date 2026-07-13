@@ -243,8 +243,8 @@ Primary pain today: `CatanScene` rebuilds the entire WebGL world when placements
 
 ### P0 — largest smoothness gains
 
-- [ ] **Incremental 3D scene updates:** keep one long-lived renderer/scene; update separate groups for hexes, pieces, highlights, racks, and dice instead of dispose+rebuild on every game change.
-- [ ] **Stable board layer:** only rebuild hexes/ports/table when the board seed (or topology) changes; leave pieces/highlights as patchable layers.
+- [x] **Incremental 3D scene updates:** keep one long-lived renderer/scene; update separate groups for hexes, pieces, highlights, racks, and dice instead of dispose+rebuild on every game change.
+- [x] **Stable board layer:** only rebuild hexes/ports/table when the board seed (or topology) changes; leave pieces/highlights as patchable layers.
 - [x] **Cache shared texture loads:** wood/plastic network fetch and decode are reused across scene rebuilds.
 - [ ] **Reuse stable scene materials and remove rebuild settling:** retain shared materials/layers across updates and do not wait ~1.5s after ordinary actions.
 

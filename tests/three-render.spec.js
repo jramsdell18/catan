@@ -50,3 +50,35 @@ for (const viewport of viewports) {
     expect(colors.size).toBeGreaterThan(8);
   });
 }
+
+test('board and camera updates preserve the WebGL renderer', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
+  await page.waitForFunction(() => Boolean(window.__CATAN_TEST_API?.getState));
+
+  const initial = await page.evaluate(() => ({
+    renderId: window.__CATAN_SCENE_STATS.renderId,
+    boardSeed: window.__CATAN_TEST_API.getState().boardSeed,
+  }));
+  const nextBoardSeed = initial.boardSeed === 24680 ? 24681 : 24680;
+
+  const testControls = page.getByTestId('development-test-controls');
+  await testControls.locator('summary').click();
+  await testControls.getByLabel('Board seed').fill(String(nextBoardSeed));
+  await testControls.getByRole('button', { name: 'Load deterministic board' }).click();
+
+  await expect.poll(
+    () => page.evaluate(() => window.__CATAN_TEST_API.getState().boardSeed),
+  ).toBe(nextBoardSeed);
+  await expect.poll(
+    () => page.evaluate(() => window.__CATAN_SCENE_STATS.renderId),
+  ).toBe(initial.renderId);
+  expect(initial.boardSeed).not.toBe(nextBoardSeed);
+
+  await page.getByTestId('reset-camera').click();
+  await expect.poll(
+    () => page.evaluate(() => window.__CATAN_SCENE_STATS.renderId),
+  ).toBe(initial.renderId);
+  await expect(page.locator('.catan-scene canvas')).toHaveCount(1);
+});

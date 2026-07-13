@@ -625,32 +625,6 @@ function CatanScene({
     };
     runtimeRef.current = runtime;
 
-    // Seed layers from the latest props so the first paint is complete.
-    const initial = snapshotRef.current;
-    if (initial) {
-      fillTerrain(layers.terrain, initial.board);
-      fillRobber(layers.robber, initial.board, initial.robberTileId);
-      fillPorts(layers.ports, initial.ports, initial.topology);
-      fillPlacedPieces(layers.pieces, initial.activePlayers, initial.topology, initial.placements);
-      fillBoardHighlights(
-        layers.highlights,
-        initial.legalTargets,
-        initial.interactionMode,
-        interactionTargets,
-      );
-      fillProductionHighlights(layers.production, initial.board, initial.productionTileIds);
-      fillPendingRoadHighlights(layers.pendingRoads, initial.topology, initial.pendingRoadEdgeIds);
-      rebuildAnimatedHighlights(runtime);
-      fillPlayerAreas(
-        layers.playerAreas,
-        initial.activePlayers,
-        initial.resourceHands,
-        initial.playerInventories,
-      );
-      fillDiceArea(layers.dice, initial.diceRoll, animatedDice);
-      publishSceneStats(runtime, initial);
-    }
-
     const savedCameraState =
       cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
 
@@ -781,6 +755,9 @@ function CatanScene({
     // Mount once for the WebGL lifetime; layer props patch via effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable scene
   }, []);
+
+  // These effects also populate every layer after the mount effect creates the runtime.
+  // Keeping initial construction here avoids building and disposing the full world twice.
 
   // Board hexes (static for a match once dealt).
   useEffect(() => {
