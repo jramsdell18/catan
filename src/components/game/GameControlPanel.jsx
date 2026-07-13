@@ -10,15 +10,17 @@ import DevelopmentControls from './DevelopmentControls.jsx';
 import Scoreboard from './Scoreboard.jsx';
 
 function GameControlPanel(props) {
-  const { game, playerView = null } = props;
+  const { game, playerView = null, viewerId = null, sharedDeviceMode = true } = props;
   const actionPhase = game?.phase === 'action';
   const canAct = !game || props.isViewerTurn;
   return (
     <section className="game-control-panel" aria-label="Game controls">
       <TurnSummary {...props} />
-      {/* Discard forms need full hands on a shared device; keep authoritative game here. */}
       <RobberWorkflow
         game={game}
+        playerView={playerView}
+        viewerId={viewerId}
+        sharedDeviceMode={sharedDeviceMode}
         selectedTileId={props.selectedRobberTileId}
         eligibleVictims={props.eligibleRobberVictims}
         onDiscard={props.onDiscard}
@@ -28,7 +30,13 @@ function GameControlPanel(props) {
       <RollOutcome game={game} playerView={playerView} />
       {props.isViewerTurn && (
         <>
-          <TradeControls game={game} onAction={props.onTradeAction} />
+          <TradeControls
+            game={game}
+            playerView={playerView}
+            viewerId={viewerId}
+            sharedDeviceMode={sharedDeviceMode}
+            onAction={props.onTradeAction}
+          />
           <DevelopmentControls
             game={game}
             playerView={playerView}

@@ -82,11 +82,6 @@ function App() {
   const topology = useMemo(() => createBoardTopology(board.hexes), [board.hexes]);
   const ports = useMemo(() => createBoardPorts(topology, board.seed), [board.seed, topology]);
   const placements = useMemo(() => placementsFromGame(game), [game]);
-  const resourceHands = useMemo(() => resourceHandsFromGame(game, activePlayers), [activePlayers, game]);
-  const playerInventories = useMemo(
-    () => playerInventoriesFromGame(game, activePlayers),
-    [activePlayers, game],
-  );
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
   const isLiveRoomConnected = Boolean(localParticipant?.connected);
   const isHost = Boolean(
@@ -102,6 +97,17 @@ function App() {
   });
   const canStartGame = canHostStart(lobbyState, localParticipant?.participantId);
   const playerView = usePlayerView(game, viewerId);
+  // Local single-browser play keeps shared-device discard/trade UX.
+  // Live multiplayer rooms always use seat-scoped privacy.
+  const sharedDeviceMode = !isLiveRoomConnected;
+  const resourceHands = useMemo(
+    () => resourceHandsFromGame(game, activePlayers, playerView),
+    [activePlayers, game, playerView],
+  );
+  const playerInventories = useMemo(
+    () => playerInventoriesFromGame(game, activePlayers),
+    [activePlayers, game],
+  );
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
   const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
   const interactionMode = isViewerTurn ? getInteractionMode(game, requestedMode) : null;
@@ -764,6 +770,8 @@ function App() {
       <GameControlPanel
         game={game}
         playerView={playerView}
+        viewerId={viewerId}
+        sharedDeviceMode={sharedDeviceMode}
         playerMessage={playerMessage}
         diceTotal={diceTotal}
         totalCards={totalCards}

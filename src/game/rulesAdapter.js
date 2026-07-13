@@ -80,19 +80,41 @@ export function placementsFromGame(game) {
   return { settlements, roads, cities };
 }
 
-export function resourceHandsFromGame(game, players) {
-  return players.map((player) => ({
-    playerId: player.id,
-    cards: game
-      ? Object.entries(game.players.find((item) => item.id === player.id)?.resources ?? {}).flatMap(
-          ([resource, count]) =>
-            Array.from({ length: count }, (_, index) => ({
-              id: `${player.id}-${resource}-${index}`,
-              resource,
-            })),
-        )
-      : [],
-  }));
+/**
+ * Face-down 3D racks: public hand *size* is fine; resource identities for
+ * non-viewer seats must not be embedded in mesh ids/data when a playerView exists.
+ */
+export function resourceHandsFromGame(game, players, playerView = null) {
+  return players.map((player) => {
+    if (!game) return { playerId: player.id, cards: [] };
+
+    const viewPlayer = playerView?.players.find((item) => item.id === player.id);
+    if (viewPlayer && viewPlayer.resources == null) {
+      const count = viewPlayer.resourceCount ?? 0;
+      return {
+        playerId: player.id,
+        cards: Array.from({ length: count }, (_, index) => ({
+          id: `${player.id}-hidden-${index}`,
+          resource: null,
+        })),
+      };
+    }
+
+    const resources =
+      viewPlayer?.resources
+      ?? game.players.find((item) => item.id === player.id)?.resources
+      ?? {};
+
+    return {
+      playerId: player.id,
+      cards: Object.entries(resources).flatMap(([resource, count]) =>
+        Array.from({ length: count }, (_, index) => ({
+          id: `${player.id}-${resource}-${index}`,
+          resource,
+        })),
+      ),
+    };
+  });
 }
 
 export function playerInventoriesFromGame(game, players) {

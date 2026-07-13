@@ -25,11 +25,16 @@ function DevelopmentControls({
   if (!game || (game.phase !== 'roll' && game.phase !== 'action')) return null;
 
   const player = game.players.find((item) => item.id === game.currentPlayerId);
-  const privatePlayer = playerView?.players.find((item) => item.isSelf) ?? player;
+  // Prefer seat view for private card list and affordability when available.
+  const privatePlayer = playerView?.players.find((item) => item.isSelf && item.resources)
+    ?? playerView?.players.find((item) => item.id === game.currentPlayerId && item.resources)
+    ?? player;
   const cards = privatePlayer.developmentCards ?? [];
+  const deckCount = playerView?.developmentDeckCount
+    ?? (Array.isArray(game.developmentDeck) ? game.developmentDeck.length : 0);
   const canBuy = game.phase === 'action'
-    && game.developmentDeck.length > 0
-    && canAfford(player.resources, BUILDING_COSTS.development);
+    && deckCount > 0
+    && canAfford(privatePlayer.resources, BUILDING_COSTS.development);
 
   function canPlay(card) {
     return card.type !== 'victoryPoint'
@@ -51,9 +56,11 @@ function DevelopmentControls({
             disabled={!canBuy}
             data-testid="buy-development"
           >
-            Buy card · {formatCost(BUILDING_COSTS.development)} · {game.developmentDeck.length} left
+            Buy card · {formatCost(BUILDING_COSTS.development)} · {deckCount} left
           </button>
-          <p className="development-help">Only the active player’s card types are shown. Cards bought this turn are locked.</p>
+          <p className="development-help">
+            Only the local seat’s card types are shown. Cards bought this turn are locked.
+          </p>
           <div className="development-hand">
             {cards.length === 0 && <p>No development cards.</p>}
             {cards.map((card, index) => {
