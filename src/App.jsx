@@ -51,6 +51,15 @@ function rollDie() {
   return 1 + Math.floor(Math.random() * 6);
 }
 
+function areDiceEqual(left, right) {
+  return Boolean(
+    Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => value === right[index]),
+  );
+}
+
 function App() {
   const [selectedPlayers, setSelectedPlayers] = useState(DEFAULT_PLAYER_COUNT);
   const [confirmedPlayers, setConfirmedPlayers] = useState(null);
@@ -165,15 +174,24 @@ function App() {
   }, [localParticipant]);
 
   const broadcastLobbyState = useCallback((nextLobbyState) => {
-    sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.LOBBY_STATE, { lobbyState: nextLobbyState });
-  }, [sendRoomMessage]);
+    sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.LOBBY_STATE, {
+      lobbyState: nextLobbyState,
+      board,
+    });
+  }, [board, sendRoomMessage]);
 
   const broadcastGameSnapshot = useCallback((nextGame, nextLobbyState = lobbyState) => {
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.GAME_SNAPSHOT, {
       game: nextGame,
       lobbyState: nextLobbyState,
+      board,
     });
-  }, [lobbyState, sendRoomMessage]);
+  }, [board, lobbyState, sendRoomMessage]);
+
+  const animateDice = useCallback((values) => {
+    if (!Array.isArray(values)) return;
+    setDiceRoll((current) => ({ values, rollId: (current?.rollId ?? 0) + 1 }));
+  }, []);
 
   const dispatchLocal = useCallback((action, options = {}) => {
     setActionFeedback({ status: 'pending', message: `Applying: ${describeAction(action.type)}...` });
@@ -189,6 +207,7 @@ function App() {
         setRequestedMode(null);
         if (action.type === 'moveRobber') setSelectedRobberTileId(null);
         if (action.type === 'playDevelopment') setSelectedRoadBuildingEdges([]);
+        if (action.type === 'rollDice') animateDice(next.dice);
         if (options.broadcast) {
           broadcastGameSnapshot(next);
         }
@@ -199,7 +218,7 @@ function App() {
         return current;
       }
     });
-  }, [broadcastGameSnapshot]);
+  }, [animateDice, broadcastGameSnapshot]);
 
   const requestOrDispatch = useCallback((action) => {
     if (!isViewerTurn) {
@@ -234,6 +253,14 @@ function App() {
   function resetTransientState(message = '') {
     setGameError('');
     setDiceRoll(null);
+    setRequestedMode(null);
+    setSelectedRobberTileId(null);
+    setSelectedRoadBuildingEdges([]);
+    setActionFeedback({ status: 'idle', message });
+  }
+
+  function resetSyncedActionState(message = '') {
+    setGameError('');
     setRequestedMode(null);
     setSelectedRobberTileId(null);
     setSelectedRoadBuildingEdges([]);
@@ -282,7 +309,7 @@ function App() {
     const nextLobbyState = lobbyState ? startLobbyGame(lobbyState) : lobbyState;
     setGame(nextGame);
     if (nextLobbyState) setLobbyState(nextLobbyState);
-    sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.GAME_START, { lobbyState: nextLobbyState, game: nextGame });
+    sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.GAME_START, { lobbyState: nextLobbyState, game: nextGame, board });
     resetTransientState('Game started.');
   }
 
@@ -303,7 +330,6 @@ function App() {
   function handleRollDice() {
     if (game?.phase !== 'roll' || !isViewerTurn) return;
     const dice = [rollDie(), rollDie()];
-    setDiceRoll((current) => ({ values: dice, rollId: (current?.rollId ?? 0) + 1 }));
     requestOrDispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
@@ -431,6 +457,7 @@ function App() {
         setLobbyState(payload.lobbyState);
         setConfirmedPlayers(payload.lobbyState?.room.playerCount ?? null);
         setSelectedPlayers(payload.lobbyState?.room.playerCount ?? DEFAULT_PLAYER_COUNT);
+        if (payload.board) setBoard(payload.board);
       }
       return;
     }
@@ -445,10 +472,16 @@ function App() {
         setConfirmedPlayers(payload.lobbyState.room.playerCount);
         setSelectedPlayers(payload.lobbyState.room.playerCount);
       }
+      if (payload.board) {
+        setBoard(payload.board);
+      }
       if (payload.game) {
+        if (Array.isArray(payload.game.dice) && !areDiceEqual(payload.game.dice, game?.dice)) {
+          animateDice(payload.game.dice);
+        }
         setGame(payload.game);
       }
-      resetTransientState('Synced with host.');
+      resetSyncedActionState('Synced with host.');
       return;
     }
 
@@ -507,6 +540,7 @@ function App() {
       dispatchLocal(action, { broadcast: true });
     }
   }, [
+    animateDice,
     broadcastGameSnapshot,
     broadcastLobbyState,
     dispatchLocal,
