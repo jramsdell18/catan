@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import GameControlPanel from './components/game/GameControlPanel.jsx';
 import StartGameOverlay from './components/game/StartGameOverlay.jsx';
+import GameOverOverlay from './components/game/GameOverOverlay.jsx';
 import { createRandomBoard } from './game/board.js';
 import { getActivePlayers } from './game/pieces.js';
 import {
@@ -35,7 +36,7 @@ function rollDie() {
 function App() {
   const [selectedPlayers, setSelectedPlayers] = useState(DEFAULT_PLAYER_COUNT);
   const [confirmedPlayers, setConfirmedPlayers] = useState(null);
-  const [board] = useState(() => createRandomBoard());
+  const [board, setBoard] = useState(() => createRandomBoard());
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [game, setGame] = useState(null);
   const [gameError, setGameError] = useState('');
@@ -168,6 +169,20 @@ function App() {
     resetTransientState('Game started.');
   }
 
+  function handleRestartGame() {
+    if (game && !window.confirm('Restart this game on the same board? All progress will be lost.')) return;
+    handleStartGame();
+  }
+
+  function handleNewGame() {
+    if (game && !window.confirm('Start a new game? All progress will be lost.')) return;
+    setGame(null);
+    setConfirmedPlayers(null);
+    setSelectedPlayers(DEFAULT_PLAYER_COUNT);
+    setBoard(createRandomBoard());
+    resetTransientState('Choose players for a new game.');
+  }
+
   function handleRollDice() {
     if (game?.phase !== 'roll') return;
     const dice = [rollDie(), rollDie()];
@@ -230,6 +245,9 @@ function App() {
           ? Object.fromEntries(game.players.map((player) => [player.id, player.developmentCards.map((card) => ({ ...card }))]))
           : null,
         playedDevelopmentThisTurn: game?.playedDevelopmentThisTurn ?? false,
+        winnerId: game?.winnerId ?? null,
+        longestRoadPlayerId: game?.longestRoadPlayerId ?? null,
+        largestArmyPlayerId: game?.largestArmyPlayerId ?? null,
         settlementCount: placements.settlements.length,
         roadCount: placements.roads.length,
         cityCount: placements.cities.length,
@@ -306,6 +324,20 @@ function App() {
       resetDevelopmentPlay: () => {
         setGame((current) => current ? { ...structuredClone(current), playedDevelopmentThisTurn: false, phase: 'action' } : current);
       },
+      prepareVictory: (playerId) => {
+        setGame((current) => {
+          if (!current) return current;
+          const next = structuredClone(current);
+          const player = next.players.find((item) => item.id === playerId);
+          if (!player || next.currentPlayerId !== playerId) return current;
+          const publicPoints = getPlayerView(next, playerId).players.find((item) => item.id === playerId).publicVictoryPoints;
+          while (publicPoints + player.developmentCards.filter((card) => card.type === 'victoryPoint').length < 10) {
+            player.developmentCards.push({ type: 'victoryPoint', boughtTurn: -1 });
+          }
+          next.phase = 'action';
+          return next;
+        });
+      },
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -353,6 +385,7 @@ function App() {
             onStart={handleStartGame}
           />
         )}
+        <GameOverOverlay playerView={playerView} onRestart={handleRestartGame} onNewGame={handleNewGame} />
       </section>
 
       <GameControlPanel
@@ -372,7 +405,7 @@ function App() {
         onEndTurn={() => game && dispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
         onSelectMode={setRequestedMode}
         onResetCamera={() => setCameraResetKey((key) => key + 1)}
-        onStartGame={handleStartGame}
+        onStartGame={game ? handleRestartGame : handleStartGame}
         boardSeed={board.seed}
         currentPlayer={currentPlayer}
         selectedRobberTileId={selectedRobberTileId}

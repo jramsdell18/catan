@@ -1,5 +1,5 @@
 import { RESOURCE_TYPES } from './constants.js';
-import { publicVictoryPoints, visibleVictoryPoints } from './scoring.js';
+import { getScoreBreakdown, publicVictoryPoints, visibleVictoryPoints } from './scoring.js';
 
 export { publicVictoryPoints };
 
@@ -22,6 +22,17 @@ function sanitizePlayer(player, viewerId, state) {
   const resourceCount = totalResources(player.resources);
   const developmentCardCount = player.developmentCards.length;
   const isSelf = player.id === viewerId;
+  const score = getScoreBreakdown(state, player.id);
+  const publicScore = {
+    settlements: score.settlements,
+    cities: score.cities,
+    settlementPoints: score.settlementPoints,
+    cityPoints: score.cityPoints,
+    longestRoad: score.longestRoad,
+    largestArmy: score.largestArmy,
+    longestRoadLength: score.longestRoadLength,
+    publicTotal: score.publicTotal,
+  };
 
   if (isSelf) {
     return {
@@ -36,6 +47,7 @@ function sanitizePlayer(player, viewerId, state) {
       pieces: copy(player.pieces),
       publicVictoryPoints: publicVictoryPoints(state, player.id),
       privateVictoryPoints: privateVictoryPoints(state, player.id),
+      score: { ...publicScore, victoryPointCards: score.victoryPointCards, privateTotal: score.privateTotal },
       isSelf: true,
     };
   }
@@ -53,6 +65,7 @@ function sanitizePlayer(player, viewerId, state) {
     pieces: copy(player.pieces),
     publicVictoryPoints: publicVictoryPoints(state, player.id),
     privateVictoryPoints: null,
+    score: publicScore,
     isSelf: false,
   };
 }

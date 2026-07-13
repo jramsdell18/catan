@@ -204,6 +204,47 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 .development-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; }
 .road-building-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; border-radius: 7px; padding: 0.65rem; background: #e8f4fb; }
 
+.scoreboard {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.78);
+}
+.scoreboard-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; }
+.scoreboard-heading h2 { margin: 0; font-size: 1.15rem; }
+.award-summary { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.award-summary span,
+.award-badge { border-radius: 999px; padding: 0.35rem 0.6rem; background: #fff3c9; font-size: 0.78rem; }
+.score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.55rem; }
+.score-card { display: grid; gap: 0.28rem; border-left: 4px solid transparent; border-radius: 6px; padding: 0.7rem; background: #fffaf0; font-size: 0.82rem; }
+.score-card.active { border-left-color: #d9a441; }
+.score-card-title { display: flex; justify-content: space-between; gap: 0.5rem; }
+.private-score { margin-top: 0.25rem; border-top: 1px solid rgba(23, 33, 29, 0.12); padding-top: 0.45rem; color: #155b38; }
+
+.game-over-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  display: grid;
+  width: min(calc(100% - 2rem), 34rem);
+  gap: 1rem;
+  border: 2px solid #d9a441;
+  border-radius: 10px;
+  padding: 1.5rem;
+  background: rgba(255, 250, 239, 0.97);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%);
+}
+.game-over-overlay h1,
+.game-over-overlay p { margin: 0; }
+.final-scores { display: grid; gap: 0.4rem; }
+.final-scores span { display: flex; justify-content: space-between; gap: 0.75rem; border-radius: 6px; padding: 0.55rem 0.7rem; background: white; }
+.game-over-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+
 @media (min-width: 620px) {
   .start-overlay { padding: 1.75rem; }
   .start-controls { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
@@ -226,6 +267,7 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
   .control-actions { grid-column: 2; }
   .table-meta { grid-column: 3; grid-template-columns: 1fr; }
   .resource-strip { grid-column: 1 / -1; }
+  .scoreboard { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {

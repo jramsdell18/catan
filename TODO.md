@@ -145,16 +145,16 @@ Every development card supported by the engine can be bought, privately inspecte
 
 ## Milestone 7: Scoring, awards, and game completion
 
-- [ ] Display public settlement and city points.
-- [ ] Display Longest Road owner and length.
-- [ ] Display Largest Army owner and knight count.
-- [ ] Show each player their private victory-point total.
+- [x] Display public settlement and city points.
+- [x] Display Longest Road owner and length.
+- [x] Display Largest Army owner and knight count.
+- [x] Show each player their private victory-point total.
 - [x] Add focused engine tests for branching roads, loops, blocked roads, award transfers, and hidden victory points.
 - [x] Add `getScoreBreakdown` / `publicVictoryPoints` helpers for scoreboard UI.
-- [ ] Show a game-over screen when a player reaches the configured victory target.
-- [ ] Display the winner and final public scores.
-- [ ] Add confirmed Restart Game and New Game actions.
-- [ ] Add an automated end-to-end scenario that reaches a legal victory.
+- [x] Show a game-over screen when a player reaches the configured victory target.
+- [x] Display the winner and final public scores.
+- [x] Add confirmed Restart Game and New Game actions.
+- [x] Add an automated end-to-end scenario that reaches a legal victory.
 
 ### Done when
 

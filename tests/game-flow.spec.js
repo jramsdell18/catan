@@ -205,6 +205,7 @@ test.describe('setup snake through production turn', () => {
       .poll(async () => (await getTestState(page)).settlementCount)
       .toBe(1);
 
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByTestId('restart-game').click();
     await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
 
@@ -213,6 +214,35 @@ test.describe('setup snake through production turn', () => {
     expect(restarted.roadCount).toBe(0);
     expect(restarted.phase).toBe('setup');
     expect(restarted.currentPlayerId).toBe('red');
+  });
+
+  test('shows scoring and completes a rules-validated victory', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+
+    await expect(page.getByTestId('scoreboard')).toBeVisible();
+    await expect(page.getByTestId('score-red')).toContainText('2 settlements');
+    await expect(page.getByTestId('score-total-red')).toHaveText('2 public VP');
+    await expect(page.getByTestId('private-score')).toContainText('2 VP');
+    await expect(page.getByTestId('longest-road-owner')).toContainText('Unclaimed');
+    await expect(page.getByTestId('largest-army-owner')).toContainText('Unclaimed');
+
+    await page.evaluate(() => window.__CATAN_TEST_API.prepareVictory('red'));
+    await expect(page.getByTestId('private-score')).toContainText('10 VP');
+    await page.getByTestId('end-turn').click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('gameOver');
+    expect((await getTestState(page)).winnerId).toBe('red');
+    await expect(page.getByTestId('game-over')).toContainText('Red wins!');
+    await expect(page.getByTestId('final-score-red')).toContainText('10 private VP');
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByTestId('new-game').click();
+    await expect(page.getByTestId('start-game')).toBeDisabled();
+    expect((await getTestState(page)).phase).toBeNull();
   });
 
   test('builds roads, a settlement, and a city through the action controls', async ({ page }) => {
