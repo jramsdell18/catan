@@ -59,8 +59,8 @@ function getSharedTexture(url, configureTexture, onReady) {
   return record.texture;
 }
 
-function disposeScene(scene) {
-  scene.traverse((child) => {
+function disposeObject3D(root) {
+  root.traverse((child) => {
     if (!child.isMesh && !child.isSprite && !child.isLine) {
       return;
     }
@@ -80,24 +80,35 @@ function disposeScene(scene) {
   });
 }
 
-function addTerrain(world, board, robberTileId) {
+function clearGroup(group) {
+  while (group.children.length > 0) {
+    const child = group.children[0];
+    group.remove(child);
+    disposeObject3D(child);
+  }
+}
+
+function fillTerrain(group, board) {
   board.hexes.forEach((hex) => {
     const tile = createHexTileMesh(hex);
     tile.position.set(hex.world.x, 0, hex.world.z);
-    world.add(tile);
-
-    if (hex.hexId === robberTileId) {
-      const robber = createRobberMesh();
-      robber.position.set(hex.world.x, 0.18, hex.world.z);
-      world.add(robber);
-    }
+    group.add(tile);
   });
 }
 
-function addPorts(world, ports, topology) {
+function fillRobber(group, board, robberTileId) {
+  const hex = board.hexes.find((item) => item.hexId === robberTileId);
+  if (!hex) {
+    return;
+  }
+
+  const robber = createRobberMesh();
+  robber.position.set(hex.world.x, 0.18, hex.world.z);
+  group.add(robber);
+}
+
+function fillPorts(group, ports, topology) {
   const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]));
-  const portGroup = new THREE.Group();
-  portGroup.name = 'ports';
 
   ports.forEach((port) => {
     const [a, b] = port.intersections.map((id) => verticesById.get(id));
@@ -109,20 +120,15 @@ function addPorts(world, ports, topology) {
     marker.name = `${port.id}-${port.resource ?? 'generic'}`;
     marker.position.set(edgeX + (edgeX / distance) * 0.7, 0.12, edgeZ + (edgeZ / distance) * 0.7);
     marker.rotation.y = -Math.atan2(edgeZ, edgeX) + Math.PI / 2;
-    portGroup.add(marker);
+    group.add(marker);
   });
-
-  world.add(portGroup);
 }
 
 function getPlayerColor(activePlayers, playerId) {
   return activePlayers.find((player) => player.id === playerId)?.color ?? '#ffffff';
 }
 
-function addPlacedPieces(world, activePlayers, topology, placements) {
-  const placedGroup = new THREE.Group();
-  placedGroup.name = 'placed-setup-pieces';
-
+function fillPlacedPieces(group, activePlayers, topology, placements) {
   placements.settlements.forEach((settlement) => {
     const vertex = topology.vertices.find((item) => item.id === settlement.vertexId);
 
@@ -132,7 +138,7 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
 
     const piece = createSettlementMesh(getPlayerColor(activePlayers, settlement.playerId));
     piece.position.set(vertex.x, 0.11, vertex.z);
-    placedGroup.add(piece);
+    group.add(piece);
   });
 
   placements.cities.forEach((city) => {
@@ -140,7 +146,7 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
     if (!vertex) return;
     const piece = createCityMesh(getPlayerColor(activePlayers, city.playerId));
     piece.position.set(vertex.x, 0.11, vertex.z);
-    placedGroup.add(piece);
+    group.add(piece);
   });
 
   placements.roads.forEach((roadPlacement) => {
@@ -153,22 +159,17 @@ function addPlacedPieces(world, activePlayers, topology, placements) {
     const road = createRoadMesh(getPlayerColor(activePlayers, roadPlacement.playerId));
     road.position.set(edge.x, 0.11, edge.z);
     road.rotation.y = edge.rotation + Math.PI / 2;
-    placedGroup.add(road);
+    group.add(road);
   });
-
-  world.add(placedGroup);
 }
 
-function addBoardHighlights(world, legalTargets, interactionMode, interactionTargets) {
-  const highlights = new THREE.Group();
-  highlights.name = 'placement-highlights';
-
+function fillBoardHighlights(group, legalTargets, interactionMode, interactionTargets) {
   legalTargets.intersections.forEach((vertex) => {
     const highlight = createSettlementHighlightMesh();
     highlight.position.set(vertex.x, 0.28, vertex.z);
     highlight.userData = { targetType: 'intersection', id: vertex.id };
     interactionTargets.push(highlight);
-    highlights.add(highlight);
+    group.add(highlight);
   });
 
   legalTargets.edges.forEach((edge) => {
@@ -177,7 +178,7 @@ function addBoardHighlights(world, legalTargets, interactionMode, interactionTar
     highlight.rotation.y = edge.rotation;
     highlight.userData = { targetType: 'edge', id: edge.id };
     interactionTargets.push(highlight);
-    highlights.add(highlight);
+    group.add(highlight);
   });
 
   legalTargets.hexes.forEach((hex) => {
@@ -185,17 +186,13 @@ function addBoardHighlights(world, legalTargets, interactionMode, interactionTar
     highlight.position.set(hex.world.x, 0.28, hex.world.z);
     highlight.userData = { targetType: 'hex', id: hex.hexId };
     interactionTargets.push(highlight);
-    highlights.add(highlight);
+    group.add(highlight);
   });
 
-  highlights.userData.interactionMode = interactionMode;
-
-  world.add(highlights);
+  group.userData.interactionMode = interactionMode;
 }
 
-function addProductionHighlights(world, board, productionTileIds, animatedHighlights) {
-  const group = new THREE.Group();
-  group.name = 'production-highlights';
+function fillProductionHighlights(group, board, productionTileIds) {
   productionTileIds.forEach((tileId) => {
     const hex = board.hexes.find((item) => item.hexId === tileId);
     if (!hex) return;
@@ -204,25 +201,19 @@ function addProductionHighlights(world, board, productionTileIds, animatedHighli
     highlight.position.set(hex.world.x, baseY, hex.world.z);
     highlight.userData.baseY = baseY;
     highlight.userData.riseAmount = 0.035;
-    animatedHighlights.push(highlight);
     group.add(highlight);
   });
-  world.add(group);
 }
 
-function addPendingRoadHighlights(world, topology, edgeIds, animatedHighlights) {
-  const group = new THREE.Group();
-  group.name = 'pending-road-building';
+function fillPendingRoadHighlights(group, topology, edgeIds) {
   edgeIds.forEach((edgeId) => {
     const edge = topology.edges.find((item) => item.id === edgeId);
     if (!edge) return;
     const highlight = createRoadHighlightMesh(edge.length, '#63b3ed');
     highlight.position.set(edge.x, 0.34, edge.z);
     highlight.rotation.y = edge.rotation;
-    animatedHighlights.push(highlight);
     group.add(highlight);
   });
-  world.add(group);
 }
 
 const PLAYER_RACK_SPOTS = [
@@ -339,10 +330,7 @@ function createPlayerArea(player, cards, inventory) {
   return playerGroup;
 }
 
-function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) {
-  const rack = new THREE.Group();
-  rack.name = 'player-areas';
-
+function fillPlayerAreas(group, activePlayers, resourceHands, playerInventories) {
   activePlayers.forEach((player, index) => {
     const spot = PLAYER_RACK_SPOTS[index % PLAYER_RACK_SPOTS.length];
     const cards = resourceHands.find((hand) => hand.playerId === player.id)?.cards ?? [];
@@ -355,19 +343,16 @@ function addPlayerAreas(world, activePlayers, resourceHands, playerInventories) 
     playerGroup.position.set(spot.x, PLAYER_TABLE_SURFACE_Y, spot.z);
     playerGroup.rotation.y = spot.rotation;
 
-    rack.add(playerGroup);
+    group.add(playerGroup);
   });
-
-  world.add(rack);
 }
 
 function getDiceValues(diceRoll) {
   return diceRoll?.values ?? [1, 1];
 }
 
-function addDiceArea(world, diceRoll, animatedDice) {
-  const diceGroup = new THREE.Group();
-  diceGroup.name = 'dice-area';
+function fillDiceArea(group, diceRoll, animatedDice) {
+  const startedAt = performance.now() / 1000;
 
   getDiceValues(diceRoll).forEach((value, index) => {
     const spot = DICE_SPOTS[index];
@@ -398,14 +383,50 @@ function addDiceArea(world, diceRoll, animatedDice) {
         targetPosition,
         startRotation,
         targetRotation,
+        startedAt,
         duration: 1.05 + index * 0.16,
       });
     }
 
-    diceGroup.add(die);
+    group.add(die);
   });
+}
 
-  world.add(diceGroup);
+function createLayerGroup(name) {
+  const group = new THREE.Group();
+  group.name = name;
+  return group;
+}
+
+function rebuildAnimatedHighlights(runtime) {
+  runtime.animatedHighlights.length = 0;
+  runtime.layers.highlights.children.forEach((child) => {
+    runtime.animatedHighlights.push(child);
+  });
+  runtime.layers.production.children.forEach((child) => {
+    runtime.animatedHighlights.push(child);
+  });
+  runtime.layers.pendingRoads.children.forEach((child) => {
+    runtime.animatedHighlights.push(child);
+  });
+}
+
+function publishSceneStats(runtime, snapshot) {
+  window.__CATAN_SCENE_STATS = {
+    renderId: runtime.renderId,
+    hexes: snapshot.board.hexes.length,
+    numberTokens: snapshot.board.hexes.filter((hex) => hex.number !== null).length,
+    ports: snapshot.ports.length,
+    robberTileId: snapshot.robberTileId,
+    players: snapshot.activePlayers.length,
+    placedRoads: snapshot.placements.roads.length,
+    placedSettlements: snapshot.placements.settlements.length,
+    placedCities: snapshot.placements.cities.length,
+    productionHighlights: snapshot.productionTileIds.length,
+    pendingRoads: snapshot.pendingRoadEdgeIds.length,
+    dice: getDiceValues(snapshot.diceRoll),
+    worldChildren: runtime.world.children.length,
+  };
 }
 
 function CatanScene({
@@ -427,7 +448,28 @@ function CatanScene({
 }) {
   const containerRef = useRef(null);
   const cameraStateRef = useRef(null);
+  const runtimeRef = useRef(null);
+  const onSelectTargetRef = useRef(onSelectTarget);
+  const snapshotRef = useRef(null);
 
+  onSelectTargetRef.current = onSelectTarget;
+  snapshotRef.current = {
+    board,
+    activePlayers,
+    resourceHands,
+    playerInventories,
+    topology,
+    ports,
+    robberTileId,
+    placements,
+    legalTargets,
+    interactionMode,
+    diceRoll,
+    productionTileIds,
+    pendingRoadEdgeIds,
+  };
+
+  // Mount once: WebGL context, camera, lights, static tables, animation loop.
   useEffect(() => {
     const container = containerRef.current;
 
@@ -443,8 +485,6 @@ function CatanScene({
     window.__CATAN_RENDER_READY = false;
     window.__CATAN_RENDER_STATS = null;
     window.__CATAN_ACTIVE_RENDER_ID = renderId;
-    const savedCameraState =
-      cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#dce9ea');
@@ -480,13 +520,28 @@ function CatanScene({
     const world = new THREE.Group();
     world.name = 'catan-world';
     scene.add(world);
+
+    const layers = {
+      terrain: createLayerGroup('terrain'),
+      robber: createLayerGroup('robber'),
+      ports: createLayerGroup('ports'),
+      pieces: createLayerGroup('placed-setup-pieces'),
+      highlights: createLayerGroup('placement-highlights'),
+      production: createLayerGroup('production-highlights'),
+      pendingRoads: createLayerGroup('pending-road-building'),
+      playerAreas: createLayerGroup('player-areas'),
+      dice: createLayerGroup('dice-area'),
+    };
+
+    Object.values(layers).forEach((layer) => world.add(layer));
+
     const interactionTargets = [];
     const animatedHighlights = [];
+    const animatedDice = [];
     const requiredSceneTextures = 2;
     const sceneTextureSettleMs = 1500;
     let loadedSceneTextures = 0;
     let sceneTexturesReadyAt = null;
-    const animatedDice = [];
 
     function markSceneTextureReady() {
       loadedSceneTextures += 1;
@@ -497,15 +552,15 @@ function CatanScene({
 
     const woodTexture = getSharedTexture(
       woodTextureUrl,
-      (woodTexture) => {
-        woodTexture.colorSpace = THREE.SRGBColorSpace;
-        woodTexture.wrapS = THREE.RepeatWrapping;
-        woodTexture.wrapT = THREE.RepeatWrapping;
-        woodTexture.center.set(0.5, 0.5);
-        woodTexture.rotation = Math.PI / 2;
-        woodTexture.repeat.set(1.65, 1.5);
-        woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        woodTexture.needsUpdate = true;
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.center.set(0.5, 0.5);
+        texture.rotation = Math.PI / 2;
+        texture.repeat.set(1.65, 1.5);
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        texture.needsUpdate = true;
       },
       () => {
         markSceneTextureReady();
@@ -520,12 +575,12 @@ function CatanScene({
 
     const plasticTexture = getSharedTexture(
       plasticTextureUrl,
-      (plasticTexture) => {
-        plasticTexture.colorSpace = THREE.SRGBColorSpace;
-        plasticTexture.wrapS = THREE.RepeatWrapping;
-        plasticTexture.wrapT = THREE.RepeatWrapping;
-        plasticTexture.repeat.set(1.2, 1.2);
-        plasticTexture.needsUpdate = true;
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1.2, 1.2);
+        texture.needsUpdate = true;
       },
       () => {
         markSceneTextureReady();
@@ -555,32 +610,49 @@ function CatanScene({
     boardTable.receiveShadow = true;
     world.add(boardTable);
 
-    addTerrain(world, board, robberTileId);
-    addPorts(world, ports, topology);
-    addPlacedPieces(world, activePlayers, topology, placements);
-    addBoardHighlights(world, legalTargets, interactionMode, interactionTargets);
-    addProductionHighlights(world, board, productionTileIds, animatedHighlights);
-    addPendingRoadHighlights(world, topology, pendingRoadEdgeIds, animatedHighlights);
-    animatedHighlights.push(...interactionTargets);
-    addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
-    addDiceArea(world, diceRoll, animatedDice);
-    window.__CATAN_SCENE_STATS = {
+    const runtime = {
       renderId,
-      hexes: board.hexes.length,
-      numberTokens: board.hexes.filter((hex) => hex.number !== null).length,
-      ports: ports.length,
-      robberTileId,
-      players: activePlayers.length,
-      placedRoads: placements.roads.length,
-      placedSettlements: placements.settlements.length,
-      placedCities: placements.cities.length,
-      productionHighlights: productionTileIds.length,
-      pendingRoads: pendingRoadEdgeIds.length,
-      dice: getDiceValues(diceRoll),
-      worldChildren: world.children.length,
+      scene,
+      camera,
+      renderer,
+      controls,
+      world,
+      layers,
+      interactionTargets,
+      animatedHighlights,
+      animatedDice,
+      hasInitializedCamera: false,
     };
+    runtimeRef.current = runtime;
 
-    let hasInitializedCamera = false;
+    // Seed layers from the latest props so the first paint is complete.
+    const initial = snapshotRef.current;
+    if (initial) {
+      fillTerrain(layers.terrain, initial.board);
+      fillRobber(layers.robber, initial.board, initial.robberTileId);
+      fillPorts(layers.ports, initial.ports, initial.topology);
+      fillPlacedPieces(layers.pieces, initial.activePlayers, initial.topology, initial.placements);
+      fillBoardHighlights(
+        layers.highlights,
+        initial.legalTargets,
+        initial.interactionMode,
+        interactionTargets,
+      );
+      fillProductionHighlights(layers.production, initial.board, initial.productionTileIds);
+      fillPendingRoadHighlights(layers.pendingRoads, initial.topology, initial.pendingRoadEdgeIds);
+      rebuildAnimatedHighlights(runtime);
+      fillPlayerAreas(
+        layers.playerAreas,
+        initial.activePlayers,
+        initial.resourceHands,
+        initial.playerInventories,
+      );
+      fillDiceArea(layers.dice, initial.diceRoll, animatedDice);
+      publishSceneStats(runtime, initial);
+    }
+
+    const savedCameraState =
+      cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
 
     function resize() {
       const { width, height } = container.getBoundingClientRect();
@@ -591,7 +663,7 @@ function CatanScene({
       camera.updateProjectionMatrix();
       renderer.setSize(safeWidth, safeHeight, false);
 
-      if (!hasInitializedCamera) {
+      if (!runtime.hasInitializedCamera) {
         if (savedCameraState) {
           camera.position.copy(savedCameraState.position);
           controls.target.copy(savedCameraState.target);
@@ -601,7 +673,7 @@ function CatanScene({
           camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
           camera.lookAt(controls.target);
         }
-        hasInitializedCamera = true;
+        runtime.hasInitializedCamera = true;
       }
       controls.update();
     }
@@ -614,7 +686,7 @@ function CatanScene({
     const pointer = new THREE.Vector2();
 
     function handlePointerDown(event) {
-      if (interactionTargets.length === 0) {
+      if (runtime.interactionTargets.length === 0) {
         return;
       }
 
@@ -623,13 +695,13 @@ function CatanScene({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(pointer, camera);
-      const [hit] = raycaster.intersectObjects(interactionTargets, true);
+      const [hit] = raycaster.intersectObjects(runtime.interactionTargets, true);
       const target = hit?.object?.userData;
 
       if (!target?.id) {
         return;
       }
-      onSelectTarget(target.id, target.targetType);
+      onSelectTargetRef.current?.(target.id, target.targetType);
     }
 
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
@@ -638,9 +710,9 @@ function CatanScene({
     let renderedFrames = 0;
 
     function animate() {
-      const elapsed = performance.now() / 1000;
-      const pulse = 1 + Math.sin(elapsed * 4) * 0.08;
-      animatedHighlights.forEach((highlight) => {
+      const now = performance.now() / 1000;
+      const pulse = 1 + Math.sin(now * 4) * 0.08;
+      runtime.animatedHighlights.forEach((highlight) => {
         highlight.scale.setScalar(pulse);
         if (Number.isFinite(highlight.userData.baseY)) {
           const riseAmount = highlight.userData.riseAmount ?? 0;
@@ -648,11 +720,11 @@ function CatanScene({
         }
 
         if (highlight.material) {
-          highlight.material.opacity = 0.62 + Math.sin(elapsed * 4) * 0.16;
+          highlight.material.opacity = 0.62 + Math.sin(now * 4) * 0.16;
         }
       });
-      animatedDice.forEach((animation) => {
-        const progress = Math.min(elapsed / animation.duration, 1);
+      runtime.animatedDice.forEach((animation) => {
+        const progress = Math.min((now - animation.startedAt) / animation.duration, 1);
         const eased = 1 - (1 - progress) ** 3;
         const bounce = Math.sin(progress * Math.PI) * 0.42 * (1 - progress * 0.25);
 
@@ -690,7 +762,7 @@ function CatanScene({
 
     return () => {
       cameraStateRef.current = {
-        cameraResetKey,
+        cameraResetKey: cameraStateRef.current?.cameraResetKey ?? cameraResetKey,
         position: camera.position.clone(),
         target: controls.target.clone(),
       };
@@ -701,27 +773,136 @@ function CatanScene({
       if (window.__CATAN_ACTIVE_RENDER_ID === renderId) {
         window.__CATAN_RENDER_READY = false;
       }
-      disposeScene(scene);
+      disposeObject3D(scene);
       renderer.dispose();
       renderer.domElement.remove();
+      runtimeRef.current = null;
     };
-  }, [
-    activePlayers,
-    board,
-    cameraResetKey,
-    diceRoll,
-    interactionMode,
-    legalTargets,
-    onSelectTarget,
-    placements,
-    playerInventories,
-    ports,
-    pendingRoadEdgeIds,
-    productionTileIds,
-    resourceHands,
-    robberTileId,
-    topology,
-  ]);
+    // Mount once for the WebGL lifetime; layer props patch via effects below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable scene
+  }, []);
+
+  // Board hexes (static for a match once dealt).
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.terrain);
+    fillTerrain(runtime.layers.terrain, board);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [board]);
+
+  // Robber position.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.robber);
+    fillRobber(runtime.layers.robber, board, robberTileId);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [board, robberTileId]);
+
+  // Ports (stable after setup).
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.ports);
+    fillPorts(runtime.layers.ports, ports, topology);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [ports, topology]);
+
+  // Settlements, cities, roads on the board.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.pieces);
+    fillPlacedPieces(runtime.layers.pieces, activePlayers, topology, placements);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [activePlayers, topology, placements]);
+
+  // Legal placement / robber hex highlights + raycast targets.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.highlights);
+    runtime.interactionTargets.length = 0;
+    fillBoardHighlights(
+      runtime.layers.highlights,
+      legalTargets,
+      interactionMode,
+      runtime.interactionTargets,
+    );
+    rebuildAnimatedHighlights(runtime);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [legalTargets, interactionMode]);
+
+  // Production pulse after dice.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.production);
+    fillProductionHighlights(runtime.layers.production, board, productionTileIds);
+    rebuildAnimatedHighlights(runtime);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [board, productionTileIds]);
+
+  // Road Building pending edges.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.pendingRoads);
+    fillPendingRoadHighlights(runtime.layers.pendingRoads, topology, pendingRoadEdgeIds);
+    rebuildAnimatedHighlights(runtime);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [topology, pendingRoadEdgeIds]);
+
+  // Per-player card racks and piece inventories.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.playerAreas);
+    fillPlayerAreas(
+      runtime.layers.playerAreas,
+      activePlayers,
+      resourceHands,
+      playerInventories,
+    );
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [activePlayers, resourceHands, playerInventories]);
+
+  // Dice faces / roll animation (startedAt-based so mid-game rolls animate).
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    clearGroup(runtime.layers.dice);
+    runtime.animatedDice.length = 0;
+    fillDiceArea(runtime.layers.dice, diceRoll, runtime.animatedDice);
+    publishSceneStats(runtime, snapshotRef.current);
+  }, [diceRoll]);
+
+  // Soft camera reset without tearing down the WebGL context.
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime || !runtime.hasInitializedCamera) return;
+
+    const saved =
+      cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
+
+    if (saved) {
+      runtime.camera.position.copy(saved.position);
+      runtime.controls.target.copy(saved.target);
+    } else {
+      const { width } = runtime.renderer.domElement.getBoundingClientRect();
+      const isNarrow = width > 0 && width < 560;
+      runtime.controls.target.set(0, 0.2, 0.3);
+      runtime.camera.position.set(0, isNarrow ? 18.5 : 16.4, isNarrow ? 18.8 : 17.2);
+      runtime.camera.lookAt(runtime.controls.target);
+    }
+    runtime.controls.update();
+    cameraStateRef.current = {
+      cameraResetKey,
+      position: runtime.camera.position.clone(),
+      target: runtime.controls.target.clone(),
+    };
+  }, [cameraResetKey]);
 
   return (
     <div
