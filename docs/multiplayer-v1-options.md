@@ -1,6 +1,6 @@
 # Multiplayer V1 architecture decision
 
-**Status:** proposed product/architecture direction for planning — **not locked** until the Durable Object (or chosen Node) runtime spike succeeds.  
+**Status:** proposed product/architecture direction for planning — **not locked** until the Durable Object (or chosen Node) runtime spike succeeds.
 **Branch:** `docs/multiplayer-v1-options`  
 **Proposed decision:** build **Approach B** (server-authoritative game). Prefer **one Cloudflare Durable Object per room** as the first hosting candidate. Keep the existing host-authoritative LiveKit path only as a local/dogfood transport while the server path is built. If the Workers/DO path fails the spike or team preferences favor conventional Node, fall back to a **thin Node WebSocket room service** or **Colyseus** (peer alternatives—not ranked as “raw WS last”).
 
@@ -246,7 +246,7 @@ Do not assume same-origin WebSockets without a reverse-proxy decision.
 
 Move the pure engine into a small internal workspace package (for example, `packages/rules`) imported by both the web client and room server. Do not make the server depend directly on browser-oriented source layout.
 
-**V1 persistence (public release bar):** persist the active room snapshot after every accepted command so a deploy or process restart does not destroy a game in progress. For the first **dogfood** vertical slice (`0.1.0`), in-memory rooms are acceptable if the team accepts “deploy ends open tables”; promote durable snapshots before hosted beta (`0.2.0` / `0.3.0`). Completed-game history, analytics, and replay storage remain M13/future work.
+**V1 persistence (public release bar):** persist the active room snapshot after every accepted command so a deploy or process restart does not destroy a game in progress. For the first server-authoritative **dogfood** vertical slice (`0.2.0`), in-memory rooms are acceptable if the team accepts “deploy ends open tables”; promote durable snapshots before hosted beta (`0.3.0` / `0.4.0`). Completed-game history, analytics, and replay storage remain M13/future work.
 
 ---
 
@@ -363,7 +363,7 @@ The current local-storage participant ID is a UI convenience, not authentication
 - Voice/video is optional.
 - Multi-client tests prove stale, duplicate, unauthorized, and out-of-turn commands are rejected and hidden state never leaks.
 
-**Can slip past first dogfood (`0.1.0`) into `0.2.0` / `0.3.0` without blocking the vertical slice:**
+**Can slip past first server-authoritative dogfood (`0.2.0`) into `0.3.0` / `0.4.0` without blocking the vertical slice:**
 
 - Polished rematch UX and ownership rules
 - Elaborate leave/abandon policies and long TTL abandoned-room cleanup
@@ -393,17 +393,17 @@ Do **not** plan one calendar blob for “all of §8.” Split by product version
 | Milestone | What “done” means | Planning guidance |
 |-----------|-------------------|-------------------|
 | **Spike** | `packages/rules` + create room + one successful `applyAction` + private view in the candidate runtime (DO or Node) | Half-day class; **blocks** platform lock-in |
-| **`0.1.0` dogfood** | End-to-end server-backed game for friends: join code, seats, full rules loop, private views, basic reject paths; dual-origin wiring workable | Several focused sessions after spike; AI-assisted pace may land a **vertical slice** in roughly **one focused day**, but treat **multi-browser sync and deploy** as variance—not a 12-hour guarantee for full §8 |
-| **`0.2.0`** | Reconnect tokens, durable active-game snapshots, multi-client privacy/turn tests, optional LiveKit | Additional sessions; often comparable effort to `0.1.0` because of flaky e2e and edge cases |
-| **`0.3.0` / `1.0.0`** | Hosted beta hardening, rematch/leave polish, ops docs, abandon TTL | Ops and UX polish; re-estimate after `0.2.0` |
+| **`0.2.0` dogfood** | End-to-end server-backed game for friends: join code, seats, full rules loop, private views, basic reject paths; dual-origin wiring workable | Several focused sessions after spike; AI-assisted pace may land a **vertical slice** in roughly **one focused day**, but treat **multi-browser sync and deploy** as variance—not a 12-hour guarantee for full §8 |
+| **`0.3.0`** | Reconnect tokens, durable active-game snapshots, multi-client privacy/turn tests, optional LiveKit | Additional sessions; often comparable effort to `0.2.0` because of flaky e2e and edge cases |
+| **`0.4.0` / `1.0.0`** | Hosted beta hardening, rematch/leave polish, ops docs, abandon TTL | Ops and UX polish; re-estimate after `0.3.0` |
 
 Approximate share of the 30–45% band (order-of-magnitude):
 
 | Phase | Relative share of multiplayer work |
 |-------|-------------------------------------:|
-| Spike + first server-backed full game (`0.1.0`) | ~40–50% |
-| Reconnect, persistence, privacy tests, optional media (`0.2.0`) | ~30–40% |
-| Deploy hardening, rematch/leave, production cleanup (`0.3.0`+) | ~15–25% |
+| Spike + first server-backed full game (`0.2.0`) | ~40–50% |
+| Reconnect, persistence, privacy tests, optional media (`0.3.0`) | ~30–40% |
+| Deploy hardening, rematch/leave, production cleanup (`0.4.0`+) | ~15–25% |
 
 These are planning estimates, not delivery guarantees. **Re-estimate after the spike** proves the shared rules package runs correctly in the chosen runtime. The main uncertainty is external deploy config and multi-browser synchronization debugging, not ordinary local rules features.
 
@@ -421,13 +421,14 @@ Use **lightweight Semantic Versioning for product releases**, while versioning t
 - Tag releases in Git (for example, `v0.1.0`) and expose the version plus Git commit SHA in diagnostics/server logs.
 - Declare `1.0.0` when the public full-game experience, reconnect behavior, privacy guarantees, and operational expectations are considered stable.
 
-Suggested progression:
+The repository already identifies the current application as `0.1.0`, although no Git release tag exists yet. Preserve that as the local/host-authoritative baseline and use this progression:
 
 | Version | Meaning |
 |---------|---------|
-| `0.1.0` | First end-to-end server-authoritative dogfood game |
-| `0.2.0` | Reconnect, persistence, private-state tests, and optional media complete |
-| `0.3.0` | Hosted multiplayer beta with operational hardening |
+| `0.1.0` | Existing local and host-authoritative baseline |
+| `0.2.0` | First end-to-end server-authoritative dogfood game |
+| `0.3.0` | Reconnect, persistence, private-state tests, and optional media complete |
+| `0.4.0` | Hosted multiplayer beta with operational hardening |
 | `1.0.0` | Supported public V1 |
 
 SemVer is useful for release communication, rollback, and bug reports, but it does not by itself protect connected clients or persisted games.
@@ -450,7 +451,13 @@ The internal rules package does not need its own SemVer unless it is published o
 
 **Blocking before platform lock-in:**
 
-- [ ] **Spike:** run shared `packages/rules` (`createGame` / `applyAction` / `getPlayerView`) in a Durable Object (or thin Node) with one private snapshot round-trip.
+- [ ] **Spike:** run shared `packages/rules` (`createGame` / `applyAction` / `getPlayerView`) in a Durable Object and prove the exit criteria below.
+- [ ] Connect two simultaneous clients to one room and send a different private view to each.
+- [ ] Accept one versioned command, reject a duplicate/stale command, and confirm it applies exactly once.
+- [ ] Persist and restore the room after runtime eviction/restart, including reconnecting a seat token.
+- [ ] Exercise the Netlify-to-game-host dual-origin path, including CORS and reconnect-token transport.
+- [ ] Run the spike locally and in an automated integration test; record any Wrangler/runtime friction.
+- [ ] Compare the result with the thin Node fallback on implementation complexity, local testing, persistence, deployment, and expected operating cost.
 - [ ] Confirm runtime: Cloudflare DO vs thin Node vs Colyseus based on spike outcome.
 
 **Planning inputs (can decide during or right after spike):**
@@ -458,9 +465,9 @@ The internal rules package does not need its own SemVer unless it is published o
 - [ ] Room code format and link shape (for example, `?room=K7M2`).
 - [ ] Game API base URL / dual-origin strategy (Netlify SPA + game host).
 - [ ] Reconnect grace and abandoned-game expiration periods.
-- [ ] Rematch ownership and readiness (can defer polish past `0.1.0`).
+- [ ] Rematch ownership and readiness (can defer polish past `0.2.0`).
 - [ ] Whether to remove the host-authoritative production path immediately or only after server dogfood succeeds.
-- [ ] Dogfood persistence: in-memory OK for `0.1.0` vs durable snapshots from day one.
+- [ ] Dogfood persistence: in-memory OK for `0.2.0` vs durable snapshots from day one.
 
 ---
 
@@ -477,7 +484,7 @@ Consensus from review of the prior “locked DO + ~12h V1” draft:
 | Keep | Qualify |
 |------|---------|
 | Approach B as product V1 | DO is preferred **candidate**, not locked |
-| Command contract, seat tokens, protocol/schema versions | Effort hours: use for **`0.1.0` slice**, not full §8 |
+| Command contract, seat tokens, protocol/schema versions | Effort hours: use for the **`0.2.0` server-authoritative slice**, not full §8 |
 | LiveKit voice-only; optional media | Thin Node is a **peer** fallback, not “raw WS last” |
 | `packages/rules` extraction | Dual Netlify + game-host origin is real work |
 | Privacy on the wire via `getPlayerView` | Rematch/abandon polish can trail first dogfood |
