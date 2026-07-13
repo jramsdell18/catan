@@ -7,6 +7,7 @@ import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 import TradeControls from './TradeControls.jsx';
 import DevelopmentControls from './DevelopmentControls.jsx';
+import { DevelopmentTestControls, RulesHelp } from './ReleaseQualityPanel.jsx';
 
 function GameControlPanel(props) {
   const { game, playerView = null, viewerId = null, sharedDeviceMode = true } = props;
@@ -15,6 +16,7 @@ function GameControlPanel(props) {
   return (
     <section className="game-control-panel" aria-label="Game controls">
       <TurnSummary {...props} />
+      <RulesHelp />
       <RobberWorkflow
         game={game}
         playerView={playerView}
@@ -76,6 +78,9 @@ function GameControlPanel(props) {
       <TableMeta game={game} boardSeed={props.boardSeed} currentPlayer={props.currentPlayer} totalCards={props.totalCards} />
       <ResourceStrip game={game} playerView={playerView} />
       <ActionHistory game={game} />
+      {import.meta.env.DEV && (
+        <DevelopmentTestControls game={game} boardSeed={props.boardSeed} onLoadBoard={props.onLoadTestBoard} onRollDice={props.onRollChosenDice} />
+      )}
     </section>
   );
 }

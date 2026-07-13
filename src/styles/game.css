@@ -20,7 +20,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  z-index: 5;
+  z-index: 7;
   display: grid;
   width: min(calc(100% - 2rem), 28rem);
   gap: 1rem;
@@ -272,6 +272,24 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 .final-scores span { display: flex; justify-content: space-between; gap: 0.75rem; border-radius: 6px; padding: 0.55rem 0.7rem; background: white; }
 .game-over-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
 
+.rules-help,
+.test-controls { min-width: 0; border: 1px solid rgba(23, 33, 29, 0.14); border-radius: 8px; padding: 0.75rem; background: rgba(255, 255, 255, 0.76); }
+.rules-help summary,
+.test-controls summary { cursor: pointer; font-weight: 800; }
+.rules-help summary:focus-visible,
+.test-controls summary:focus-visible { outline: 3px solid #d9a441; outline-offset: 3px; }
+.rules-help-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin-top: 0.75rem; }
+.rules-help-content h3,
+.rules-help-content p,
+.rules-help-content ol { margin: 0; }
+.rules-help-content ol { padding-left: 1.2rem; }
+.cost-reference { display: grid; gap: 0.35rem; margin: 0; }
+.cost-reference div { display: flex; justify-content: space-between; gap: 0.7rem; }
+.cost-reference dt { font-weight: 800; }
+.cost-reference dd { margin: 0; text-align: right; }
+.test-control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; gap: 0.55rem; margin-top: 0.65rem; }
+.test-control-grid label { display: grid; gap: 0.25rem; font-size: 0.78rem; font-weight: 800; }
+
 @media (min-width: 620px) {
   .start-overlay { padding: 1.75rem; }
   .start-controls { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
@@ -294,6 +312,8 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
   .control-actions { grid-column: 2; }
   .table-meta { grid-column: 3; grid-template-columns: 1fr; }
   .resource-strip { grid-column: 1 / -1; }
+  .rules-help,
+  .test-controls { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {

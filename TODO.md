@@ -204,12 +204,12 @@ Goal: **full engine state is never the multiplayer wire format.** One seat sees 
 
 ## Milestone 9: Local release quality
 
-- [ ] Add contextual rules help and a build-cost reference.
-- [ ] Add confirmations for expensive or irreversible actions where useful.
-- [ ] Review keyboard, touch, focus, color contrast, and screen-reader accessibility.
-- [ ] Test the complete game on desktop and mobile viewports.
-- [ ] Add deterministic test-board and dice controls available only in development/test builds.
-- [ ] Resolve production bundle-size warnings or document the accepted tradeoff.
+- [x] Add contextual rules help and a build-cost reference.
+- [x] Add confirmations for expensive or irreversible actions where useful.
+- [x] Review keyboard, touch, focus, color contrast, and screen-reader accessibility.
+- [x] Test the complete game on desktop and mobile viewports.
+- [x] Add deterministic test-board and dice controls available only in development/test builds.
+- [x] Resolve production bundle-size warnings or document the accepted tradeoff. *(documented in `docs/bundle-size.md`)*
 - [x] Run `npm test`, board-rules, Playwright e2e, and `npm run build` in CI (`.github/workflows/ci.yml`).
 
 ### Done when

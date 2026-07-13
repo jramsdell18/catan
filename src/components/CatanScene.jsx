@@ -723,7 +723,14 @@ function CatanScene({
     topology,
   ]);
 
-  return <div ref={containerRef} className="catan-scene" aria-label="3D Catan board sandbox" />;
+  return (
+    <div
+      ref={containerRef}
+      className="catan-scene"
+      role="img"
+      aria-label="Interactive 3D Catan board. Select highlighted locations with a mouse or touch."
+    />
+  );
 }
 
 export default CatanScene;
