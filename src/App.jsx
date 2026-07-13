@@ -40,6 +40,7 @@ import {
   startLobbyGame,
 } from './game/multiplayerRoom.js';
 import { createBoardTopology } from './game/topology.js';
+import { RESOURCE_TYPES } from './rules/constants.js';
 import { applyAction, createGame, getPlayerView, TERRAIN_RESOURCE } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
@@ -47,6 +48,7 @@ const DEFAULT_PLAYER_COUNT = 4;
 const DATA_TOPIC = 'catan-game';
 const HOST_HEARTBEAT_MS = 5000;
 const HOST_TIMEOUT_MS = 16000;
+const SIMULATOR_STEP_MS = 650;
 
 function rollDie() {
   return 1 + Math.floor(Math.random() * 6);
@@ -59,6 +61,100 @@ function areDiceEqual(left, right) {
       left.length === right.length &&
       left.every((value, index) => value === right[index]),
   );
+}
+
+function randomItem(items) {
+  if (!items.length) return null;
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function hasResources(resources, cost) {
+  return Object.entries(cost).every(([resource, amount]) => (resources?.[resource] ?? 0) >= amount);
+}
+
+function createRandomDiscard(resources, amount) {
+  const cards = RESOURCE_TYPES.flatMap((resource) => Array(resources[resource] ?? 0).fill(resource));
+  const discard = Object.fromEntries(RESOURCE_TYPES.map((resource) => [resource, 0]));
+
+  for (let index = 0; index < amount && cards.length > 0; index += 1) {
+    const cardIndex = Math.floor(Math.random() * cards.length);
+    const [resource] = cards.splice(cardIndex, 1);
+    discard[resource] += 1;
+  }
+
+  return discard;
+}
+
+function getSimulatedTradeAcceptance(game, simulatedPlayerIds) {
+  const offer = game?.tradeOffer;
+  if (!offer || game.phase !== 'action') return null;
+
+  return game.players
+    .filter((player) => simulatedPlayerIds.has(player.id))
+    .filter((player) => player.id !== offer.fromPlayerId)
+    .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
+    .find((player) => hasResources(player.resources, offer.receive))
+    ? {
+        type: 'acceptTrade',
+        playerId: game.players
+          .filter((player) => simulatedPlayerIds.has(player.id))
+          .filter((player) => player.id !== offer.fromPlayerId)
+          .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
+          .find((player) => hasResources(player.resources, offer.receive)).id,
+      }
+    : null;
+}
+
+function getSimulationAction({ game, topology, board, simulatedPlayerIds }) {
+  if (!game || !simulatedPlayerIds.size || game.phase === 'gameOver') return null;
+
+  const tradeAction = getSimulatedTradeAcceptance(game, simulatedPlayerIds);
+  if (tradeAction) return tradeAction;
+
+  if (game.phase === 'discard') {
+    const discarder = game.players.find((player) =>
+      simulatedPlayerIds.has(player.id) && game.pendingDiscards?.[player.id],
+    );
+    if (!discarder) return null;
+    return {
+      type: 'discard',
+      playerId: discarder.id,
+      resources: createRandomDiscard(discarder.resources, game.pendingDiscards[discarder.id]),
+    };
+  }
+
+  if (!simulatedPlayerIds.has(game.currentPlayerId)) return null;
+
+  if (game.phase === 'setup') {
+    const mode = getInteractionMode(game);
+    const targets = getLegalTargets(game, topology, board, mode);
+    const target = mode === INTERACTION_MODES.PLACE_ROAD
+      ? randomItem(targets.edges)
+      : randomItem(targets.intersections);
+    return target ? actionForTarget(mode, game, target.id) : null;
+  }
+
+  if (game.phase === 'roll') {
+    return { type: 'rollDice', playerId: game.currentPlayerId, dice: [rollDie(), rollDie()] };
+  }
+
+  if (game.phase === 'robber') {
+    const hex = randomItem(board.hexes.filter((item) => item.hexId !== game.board.robberTileId));
+    if (!hex) return null;
+    const victim = randomItem(getEligibleRobberVictims(game, hex.hexId));
+    return {
+      type: 'moveRobber',
+      playerId: game.currentPlayerId,
+      tileId: hex.hexId,
+      victimId: victim?.id,
+    };
+  }
+
+  if (game.phase === 'action') {
+    return { type: 'endTurn', playerId: game.currentPlayerId };
+  }
+
+  return null;
 }
 
 function App() {
@@ -78,6 +174,7 @@ function App() {
   const [lastHostHeartbeatAt, setLastHostHeartbeatAt] = useState(Date.now());
   const [selectedRoadBuildingEdges, setSelectedRoadBuildingEdges] = useState([]);
   const [localTestMode, setLocalTestMode] = useState(false);
+  const [simulateOpponents, setSimulateOpponents] = useState(false);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -96,6 +193,13 @@ function App() {
   const viewerId = isLocalTestMode
     ? game?.currentPlayerId ?? null
     : getParticipantPlayerId(lobbyState, localParticipant?.participantId);
+  const simulatorHumanPlayerId = isLocalTestMode
+    ? activePlayers[0]?.id ?? null
+    : viewerId ?? activePlayers[0]?.id ?? null;
+  const simulatedPlayerIds = useMemo(
+    () => new Set(activePlayers.map((player) => player.id).filter((playerId) => playerId !== simulatorHumanPlayerId)),
+    [activePlayers, simulatorHumanPlayerId],
+  );
   const viewerRole = isLocalTestMode
     ? 'host'
     : getParticipantRole(lobbyState, localParticipant?.participantId);
@@ -113,12 +217,27 @@ function App() {
     () => resourceHandsFromGame(game, activePlayers, playerView),
     [activePlayers, game, playerView],
   );
+  const playerStats = useMemo(() => activePlayers.map((player) => {
+    const viewPlayer = playerView?.players.find((item) => item.id === player.id);
+    const fullPlayer = game?.players.find((item) => item.id === player.id);
+    const hand = resourceHands.find((item) => item.playerId === player.id);
+    const resourceCount = viewPlayer?.resourceCount ?? hand?.cards.length ?? 0;
+    const victoryPoints = viewPlayer?.isSelf && typeof viewPlayer.privateVictoryPoints === 'number'
+      ? viewPlayer.privateVictoryPoints
+      : viewPlayer?.publicVictoryPoints ?? 0;
+
+    return {
+      playerId: player.id,
+      cards: resourceCount,
+      victoryPoints,
+      developmentCards: viewPlayer?.developmentCardCount ?? fullPlayer?.developmentCards?.length ?? 0,
+    };
+  }), [activePlayers, game, playerView, resourceHands]);
   const playerInventories = useMemo(
     () => playerInventoriesFromGame(game, activePlayers),
     [activePlayers, game],
   );
   const diceTotal = game?.dice ? game.dice[0] + game.dice[1] : null;
-  const totalCards = resourceHands.reduce((total, hand) => total + hand.cards.length, 0);
   const interactionMode = isViewerTurn ? getInteractionMode(game, requestedMode) : null;
   const eligibleRobberVictims = useMemo(
     () => selectedRobberTileId ? getEligibleRobberVictims(game, selectedRobberTileId) : [],
@@ -144,6 +263,7 @@ function App() {
       .map((tile) => tile.tileId) ?? [],
     [game?.lastProduction],
   );
+  const canRollDiceNow = Boolean(game?.phase === 'roll' && isViewerTurn);
 
   const playerMessage = useMemo(() => {
     if (!isLocalTestMode && lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
@@ -634,6 +754,34 @@ function App() {
   }, [isHost, isLiveRoomConnected, lastHostHeartbeatAt, lobbyState]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV || !simulateOpponents || !game) return undefined;
+    if (!isLocalTestMode && !isHost) return undefined;
+
+    const action = getSimulationAction({
+      game,
+      topology,
+      board,
+      simulatedPlayerIds,
+    });
+    if (!action) return undefined;
+
+    const timeout = window.setTimeout(() => {
+      dispatchLocal(action, { broadcast: !isLocalTestMode && isHost });
+    }, SIMULATOR_STEP_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    board,
+    dispatchLocal,
+    game,
+    isHost,
+    isLocalTestMode,
+    simulateOpponents,
+    simulatedPlayerIds,
+    topology,
+  ]);
+
+  useEffect(() => {
     if (!import.meta.env.DEV) return undefined;
     window.__CATAN_TEST_API = {
       getState: () => ({
@@ -679,6 +827,7 @@ function App() {
         viewerRole,
         isViewerTurn,
         localTestMode: isLocalTestMode,
+        simulateOpponents,
         lobbyState,
         resources: game
           ? Object.fromEntries(game.players.map((player) => [player.id, { ...player.resources }]))
@@ -772,7 +921,7 @@ function App() {
     placementOptions.roads, placementOptions.settlements, placements.cities.length,
     placements.roads.length, placements.settlements.length, playerInventories, playerView,
     productionCandidates, requestOrDispatch, selectedRoadBuildingEdges, selectedRobberTileId,
-    topology, viewerId, viewerRole,
+    simulateOpponents, topology, viewerId, viewerRole,
   ]);
 
   return (
@@ -797,12 +946,27 @@ function App() {
         />
         {!isLocalTestMode && <LiveKitTableCall
           players={activePlayers}
+          playerStats={playerStats}
           claimedPlayerIds={lobbyState?.seats.filter((seat) => seat.claimedBy).map((seat) => seat.playerId) ?? []}
           outboundMessage={outboundMessage}
           onDataMessage={handleDataMessage}
           onLocalParticipantChange={handleLocalParticipantChange}
           onParticipantPresenceChange={handleParticipantPresenceChange}
         />}
+        {canRollDiceNow && (
+          <div className="turn-dice-overlay" role="status" aria-live="polite">
+            <div className="turn-dice-card">
+              <p className="status-label">Your Turn</p>
+              <div className="turn-dice-pair" aria-hidden="true">
+                <span>?</span>
+                <span>?</span>
+              </div>
+              <button type="button" data-testid="roll-dice-overlay" onClick={handleRollDice}>
+                Roll Dice
+              </button>
+            </div>
+          </div>
+        )}
         {!game && (
           <StartGameOverlay
             selectedPlayers={selectedPlayers}
@@ -830,7 +994,6 @@ function App() {
         sharedDeviceMode={sharedDeviceMode}
         playerMessage={playerMessage}
         diceTotal={diceTotal}
-        totalCards={totalCards}
         gameError={gameError}
         interactionMode={interactionMode}
         requestedMode={requestedMode}
@@ -874,6 +1037,8 @@ function App() {
           edgeIds: selectedRoadBuildingEdges,
         })}
         onCancelRoadBuilding={cancelInteraction}
+        simulateOpponents={simulateOpponents}
+        onToggleSimulation={setSimulateOpponents}
         onLoadTestBoard={handleLoadTestBoard}
         onRollChosenDice={handleChosenDice}
       />

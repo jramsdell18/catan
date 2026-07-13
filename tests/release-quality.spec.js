@@ -39,10 +39,7 @@ for (const viewport of viewports) {
     await page.waitForFunction(() => Boolean(window.__CATAN_TEST_API?.getState));
     await enableLocalTestMode(page);
 
-    await page.getByTestId('rules-help').locator('summary').focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByTestId('rules-help')).toContainText('Settlement');
-    await expect(page.getByTestId('rules-help')).toContainText('1 wood + 1 brick + 1 hay + 1 sheep');
+    await expect(page.getByTestId('rules-help')).toHaveCount(0);
 
     const tools = page.getByTestId('development-test-controls');
     await tools.locator('summary').click();

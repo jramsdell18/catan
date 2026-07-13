@@ -4,7 +4,6 @@ function TurnSummary({
   game,
   playerMessage,
   diceTotal,
-  totalCards,
   gameError,
   interactionMode,
   requestedMode,
@@ -17,7 +16,6 @@ function TurnSummary({
       <p className="status-message" data-testid="status-message">{playerMessage}</p>
       {game && <p className="helper-text" data-testid="engine-phase">Engine phase: {game.phase}</p>}
       {game?.dice && <p className="helper-text" data-testid="last-roll">Last roll: {game.dice.join(' + ')} = {diceTotal}</p>}
-      {game && <p className="helper-text">Cards in play: {totalCards}</p>}
       {gameError && <p className="game-error" role="alert" data-testid="game-error">{gameError}</p>}
       {interactionMode && (
         <div className="interaction-status" data-testid="interaction-status">

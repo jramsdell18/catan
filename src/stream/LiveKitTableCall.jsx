@@ -13,6 +13,7 @@ const TOKEN_ENDPOINT =
 
 function LiveKitTableCall({
   players,
+  playerStats = [],
   claimedPlayerIds = [],
   outboundMessage = null,
   onDataMessage,
@@ -46,6 +47,10 @@ function LiveKitTableCall({
   const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? players[0];
   const localParticipant = participants.find((participant) => participant.isLocal) ?? null;
   const participantsByPlayerId = useMemo(() => mapParticipantsToPlayers(participants, players), [participants, players]);
+  const statsByPlayerId = useMemo(
+    () => new Map(playerStats.map((stats) => [stats.playerId, stats])),
+    [playerStats],
+  );
   const claimedPlayerIdSet = useMemo(() => new Set(claimedPlayerIds), [claimedPlayerIds]);
   const availablePlayers = useMemo(
     () => players.filter((player) => player.id === selectedPlayerId || !claimedPlayerIdSet.has(player.id)),
@@ -275,6 +280,7 @@ function LiveKitTableCall({
         {players.map((player) => {
           const participant = participantsByPlayerId.get(player.id) ?? null;
           const isSpeaking = participant ? activeSpeakerIds.has(participant.identity) : false;
+          const stats = statsByPlayerId.get(player.id) ?? null;
 
           return (
             <PlayerVideoBubble
@@ -282,6 +288,7 @@ function LiveKitTableCall({
               player={player}
               participant={participant}
               isSpeaking={isSpeaking}
+              stats={stats}
             />
           );
         })}
@@ -386,7 +393,7 @@ function LiveKitTableCall({
   );
 }
 
-function PlayerVideoBubble({ player, participant, isSpeaking }) {
+function PlayerVideoBubble({ player, participant, isSpeaking, stats }) {
   const videoRef = useRef(null);
   const cameraTrack = participant?.cameraTrack ?? null;
   const initials = getInitials(participant?.name || player.label);
@@ -407,19 +414,26 @@ function PlayerVideoBubble({ player, participant, isSpeaking }) {
   }, [cameraTrack]);
 
   return (
-    <div
-      className={`table-video-bubble table-video-seat-${player.seat}${participant ? ' is-occupied' : ''}${
-        isSpeaking ? ' is-speaking' : ''
-      }`}
-      style={{ '--player-color': player.color }}
-      title={`${player.label}${participant?.name ? `: ${participant.name}` : ''}`}
-      aria-label={`${player.label} video`}
-    >
-      {cameraTrack ? (
-        <video ref={videoRef} autoPlay muted={participant?.isLocal ?? false} playsInline />
-      ) : (
-        <span>{initials}</span>
-      )}
+    <div className={`table-video-seat table-video-seat-${player.seat}`}>
+      <div
+        className={`table-video-bubble${participant ? ' is-occupied' : ''}${
+          isSpeaking ? ' is-speaking' : ''
+        }`}
+        style={{ '--player-color': player.color }}
+        title={`${player.label}${participant?.name ? `: ${participant.name}` : ''}`}
+        aria-label={`${player.label} video`}
+      >
+        {cameraTrack ? (
+          <video ref={videoRef} autoPlay muted={participant?.isLocal ?? false} playsInline />
+        ) : (
+          <span>{initials}</span>
+        )}
+      </div>
+      <div className="table-video-stats" aria-label={`${player.label} table stats`}>
+        <span title="Resource cards"><b>C</b>{stats?.cards ?? 0}</span>
+        <span title="Victory points"><b>VP</b>{stats?.victoryPoints ?? 0}</span>
+        <span title="Development cards"><b>D</b>{stats?.developmentCards ?? 0}</span>
+      </div>
     </div>
   );
 }

@@ -113,7 +113,6 @@ test.describe('lobby and board controls', () => {
     expect(state.roadOptions).toEqual([]);
 
     await expect(page.getByTestId('status-message')).toContainText('places a settlement');
-    await expect(page.getByTestId('current-player-label')).toHaveText('Red');
     await expect(page.getByTestId('player-resources')).toBeVisible();
     await expect(page.getByTestId('player-state-red')).toHaveAttribute('data-active', 'true');
   });
@@ -150,8 +149,6 @@ test.describe('setup snake through production turn', () => {
       });
     }
 
-    await expect(page.getByTestId('cards-in-play')).toHaveText('15');
-    await expect(page.getByTestId('action-history')).toBeVisible();
     await expect(page.getByTestId('status-message')).toContainText('rolls the dice');
     await expect(page.getByTestId('roll-dice')).toBeEnabled();
     await expect(page.getByTestId('end-turn')).toBeDisabled();

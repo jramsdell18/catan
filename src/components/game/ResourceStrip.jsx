@@ -30,41 +30,44 @@ function ResourceStrip({ game, playerView = null }) {
 
   const players = source.players;
   const currentPlayerId = source.currentPlayerId ?? game?.currentPlayerId;
+  const visiblePlayer =
+    players.find((player) => player.isSelf) ??
+    players.find((player) => player.id === currentPlayerId) ??
+    players[0];
+
+  if (!visiblePlayer) return null;
 
   return (
     <div className="resource-strip" aria-label="Player resources" data-testid="player-resources">
-      {players.map((player) => (
-        <div
-          className={player.id === currentPlayerId ? 'player-state active' : 'player-state'}
-          key={player.id}
-          data-testid={`player-state-${player.id}`}
-          data-active={player.id === currentPlayerId ? 'true' : 'false'}
-          data-private={player.isSelf === false || player.resources == null ? 'true' : 'false'}
-        >
-          <strong>{player.name}</strong>
-          <span data-testid={`player-resources-${player.id}`}>{formatHand(player)}</span>
-          <div className="player-stat-row" aria-label={`${player.name} counters`}>
-            <span
-              className="player-stat-pill"
-              title="Victory points"
-              aria-label={`Victory points: ${getVictoryPoints(player)}`}
-              data-testid={`player-public-vp-${player.id}`}
-            >
-              <span className="player-stat-icon" aria-hidden="true">VP</span>
-              <strong>{getVictoryPoints(player)}</strong>
-            </span>
-            <span
-              className="player-stat-pill"
-              title="Development cards"
-              aria-label={`Development cards: ${getDevelopmentCardCount(player)}`}
-              data-testid={`player-development-count-${player.id}`}
-            >
-              <span className="player-stat-icon" aria-hidden="true">D</span>
-              <strong>{getDevelopmentCardCount(player)}</strong>
-            </span>
-          </div>
+      <div
+        className="player-state active"
+        data-testid={`player-state-${visiblePlayer.id}`}
+        data-active={visiblePlayer.id === currentPlayerId ? 'true' : 'false'}
+        data-private={visiblePlayer.isSelf === false || visiblePlayer.resources == null ? 'true' : 'false'}
+      >
+        <strong>{visiblePlayer.name}</strong>
+        <span data-testid={`player-resources-${visiblePlayer.id}`}>{formatHand(visiblePlayer)}</span>
+        <div className="player-stat-row" aria-label={`${visiblePlayer.name} counters`}>
+          <span
+            className="player-stat-pill"
+            title="Victory points"
+            aria-label={`Victory points: ${getVictoryPoints(visiblePlayer)}`}
+            data-testid={`player-public-vp-${visiblePlayer.id}`}
+          >
+            <span className="player-stat-icon" aria-hidden="true">VP</span>
+            <strong>{getVictoryPoints(visiblePlayer)}</strong>
+          </span>
+          <span
+            className="player-stat-pill"
+            title="Development cards"
+            aria-label={`Development cards: ${getDevelopmentCardCount(visiblePlayer)}`}
+            data-testid={`player-development-count-${visiblePlayer.id}`}
+          >
+            <span className="player-stat-icon" aria-hidden="true">D</span>
+            <strong>{getDevelopmentCardCount(visiblePlayer)}</strong>
+          </span>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
