@@ -62,4 +62,16 @@ const view = getPlayerView(game, 'p1');
 
 Use `publicVictoryPoints` for scoreboard UI and `privateVictoryPoints` only for the owning player (or win checks on the server).
 
+### Multiplayer contract (M8)
+
+| Layer | Responsibility |
+|-------|----------------|
+| Server (or host) | Holds **full** engine state; only mutates via `applyAction` |
+| Transport | Delivers **`getPlayerView(game, seatId)`** to each client—not the full `game` |
+| Client UI | Renders from the view; sends **commands** `{ type, playerId, ... }`, never “I already have 10 ore” |
+
+Local single-browser play may still keep full state in memory for `applyAction` and legal-target checks; it should still **display** private surfaces through `getPlayerView` so the same boundary is exercised before online work.
+
+Local save/resume and pass-and-play handoff are **out of scope** for this boundary (see Future milestone in `TODO.md`).
+
 Two-player Catan and 5–6 player Catan are not base-game modes. Add their variant/expansion turn rules separately before exposing them as standard games.

@@ -1,6 +1,8 @@
 # Catan development roadmap
 
-This roadmap is ordered by dependency and delivery value. Finish each milestone before moving to the next unless a task is explicitly optional. The first major target is a complete local game; online multiplayer follows after the local rules and UI are stable.
+This roadmap is ordered by dependency and delivery value. Finish each milestone before moving to the next unless a task is explicitly optional.
+
+**Product direction:** the primary target is a **live multiplayer** game (play until victory or abandon). Local play is the development client. Optional local conveniences (pass-and-play handoff, save/resume) are deferred to a low-priority future milestone—not required for multiplayer readiness.
 
 ## Milestone 0: Current foundation
 
@@ -204,7 +206,7 @@ Begin this milestone only after the local game is complete and engine state can 
 ## Milestone 11: Real-time multiplayer and private state
 
 - [ ] Synchronize commands and public state over WebSockets.
-- [ ] Send each client only its sanitized player view.
+- [ ] Send each client only `getPlayerView(game, seatId)` (M8 boundary)—never the full engine state.
 - [ ] Broadcast public events without leaking hidden resources or development cards.
 - [ ] Restore identity after a page refresh.
 - [ ] Reconnect players to the latest state.
@@ -212,6 +214,8 @@ Begin this milestone only after the local game is complete and engine state can 
 - [ ] Add multiplayer tests using multiple simultaneous clients.
 
 ## Milestone 12: Persistence, operations, and security
+
+Server-side and ops only (not local browser save).
 
 - [ ] Persist active games and restore them after a server restart.
 - [ ] Optionally store completed-game history and replays.
@@ -224,10 +228,19 @@ Begin this milestone only after the local game is complete and engine state can 
 
 Three or four players on separate clients can join a room, complete a game, reconnect safely, and never receive another player's hidden information.
 
+## Future (low priority): Local convenience
+
+Not required for multiplayer. Build only if local hot-seat or long offline sessions become a product goal.
+
+- [ ] Pass-and-play screen between local players (hide previous seat before next views private UI).
+- [ ] Confirmation before revealing the active player's private view on a shared device.
+- [ ] Local save / resume of a single-device game (`localStorage` or file dump of engine state).
+- [ ] Dev-only state export for bug reports.
+
 ## Verification commands
 
 ```bash
 npm test
-npm run test:render
+npm run test:ci   # unit + board-rules + build + e2e (mirrors GitHub Actions)
 npm run build
 ```
