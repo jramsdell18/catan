@@ -345,6 +345,20 @@ function App() {
     requestOrDispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
+  function handleChosenDice(dice) {
+    if (game?.phase !== 'roll') return;
+    setDiceRoll((current) => ({ values: dice, rollId: (current?.rollId ?? 0) + 1 }));
+    dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
+  }
+
+  function handleLoadTestBoard(seed) {
+    if (!Number.isFinite(seed)) return;
+    if (game && !window.confirm('Load this test board? Current game progress will be lost.')) return;
+    setBoard(createRandomBoard(seed));
+    setGame(null);
+    resetTransientState(`Loaded deterministic board ${seed}.`);
+  }
+
   const handleSelectTarget = useCallback((targetId) => {
     if (!game || !interactionMode || !isViewerTurn) return;
     if (interactionMode === INTERACTION_MODES.MOVE_ROBBER) {
@@ -824,6 +838,8 @@ function App() {
           edgeIds: selectedRoadBuildingEdges,
         })}
         onCancelRoadBuilding={cancelInteraction}
+        onLoadTestBoard={handleLoadTestBoard}
+        onRollChosenDice={handleChosenDice}
       />
     </main>
   );
