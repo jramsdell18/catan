@@ -162,20 +162,41 @@ Every development card supported by the engine can be bought, privately inspecte
 
 A local game can proceed from setup through a rules-validated victory without unsupported phases or manual state changes.
 
-## Milestone 8: Local-game privacy and persistence
+## Milestone 8: Multiplayer-ready privacy boundary
 
-- [ ] Add a pass-device screen between local players.
-- [x] Hide resource identities belonging to other players. *(engine view + ResourceStrip)*
-- [x] Hide development cards belonging to other players. *(engine view; private hand UI later)*
-- [ ] Require confirmation before revealing the active player's private view.
+Goal: **full engine state is never the multiplayer wire format.** One seat sees only what `getPlayerView(game, playerId)` allows. This is the shared contract for the local UI today and for server→client payloads later (M10–11).
+
+### Engine / contract
+
 - [x] Implement `getPlayerView(game, playerId)` as the shared state-sanitization boundary.
-- [x] Wire seat view into UI (`usePlayerView` → ResourceStrip / RollOutcome).
-- [ ] Add save and resume support for a local game.
-- [x] Add tests that private cards never appear in another player's view.
+- [x] Hide opponent resource breakdowns (`resources: null`, public `resourceCount` only).
+- [x] Hide opponent development card types (`developmentCards: null`, public count only).
+- [x] Never expose development-deck composition (count only).
+- [x] Split public vs private VP (`publicVictoryPoints` / `privateVictoryPoints`).
+- [x] Redact production/robbery details that would leak private cards to bystanders.
+- [x] Unit tests that private card identities never appear in another player's view.
+- [x] Document the privacy contract in `src/rules/README.md`.
 
-### Done when
+### Client usage (local app as reference multiplayer client)
 
-Players can complete a pass-and-play game on one device without casually exposing private hands, and can resume an interrupted game.
+- [x] Derive seat UI from `usePlayerView` / `getPlayerView` for hands and private outcomes (`ResourceStrip`, `RollOutcome`, scoreboard private total).
+- [x] Keep `applyAction` on **full** authoritative state (view is display-only; never the rules source of truth).
+- [ ] Audit remaining UI so no component reads `game.players[*].resources` or `.developmentCards` for **non-viewer** seats when rendering (discard forms for the acting seat may still use full state on a shared device until true multi-client).
+- [ ] Treat “send `getPlayerView` per connected seat” as the required multiplayer transport rule when M10/M11 start (no full-state broadcast).
+
+### Explicitly out of scope for M8 (see Future milestone)
+
+- Pass-and-play device handoff / “reveal seat” confirmation  
+- Local save / resume to `localStorage`  
+- Online reconnect and server-side game persistence (M11–12)
+
+### Done when (multiplayer readiness)
+
+- [x] A single function defines what one player is allowed to know.
+- [x] Tests lock the non-leak guarantees for hands, VP cards, and deck.
+- [x] The local client already demonstrates view-based rendering for the main private surfaces.
+- [ ] Remaining UI audit complete (checkbox above).
+- [ ] Multiplayer milestones reference this boundary instead of inventing a second sanitizer.
 
 ## Milestone 9: Local release quality
 
