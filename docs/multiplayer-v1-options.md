@@ -1,8 +1,8 @@
-# Multiplayer v1 options (temporary design note)
+# Multiplayer V1 architecture decision
 
-**Status:** temporary working document for product/architecture discussion.  
+**Status:** recommended multiplayer V1 direction, with alternatives retained for context.
 **Branch:** `docs/multiplayer-v1-options`  
-**Not** a commitment to ship either path as written; capture A vs B so we can choose deliberately.
+**Decision:** build a server-authoritative V1 using one Cloudflare Durable Object per game room. Keep the existing host-authoritative path only as a local/dogfood transport while the server path is built. Colyseus is the fallback if a conventional Node runtime is preferred.
 
 **Related roadmap:** TODO milestones M11–M13 (server foundation, realtime private state, ops).  
 **Related code today:** `src/App.jsx` (host `applyAction` + snapshots), `src/game/multiplayerRoom.js`, `src/stream/LiveKitTableCall.jsx` (media + data channel), `netlify/functions/livekit-token.js`, `src/rules/*` (engine + `getPlayerView`).
@@ -210,23 +210,24 @@ Reasonable homes for the **game service**:
 
 | Option | Fit | Notes |
 |--------|-----|--------|
-| **Fly.io / Railway / Render / a small VPS** | Good default | One Node process: HTTP + WebSocket, in-memory rooms for v1 |
+| **Fly.io / Railway / Render / a small VPS** | Good conventional option | Prefer Colyseus over hand-rolling room lifecycle, reconnection, and state synchronization |
 | **LiveKit + separate WS on same VPS** | Good | Colocate for low latency; still two protocols |
-| **Cloudflare Durable Objects / PartyKit-style** | Possible | Strong for rooms + WS; different programming model |
+| **Cloudflare Durable Objects** | **Preferred for V1** | One authoritative object per room; serialized commands, WebSockets, and durable active-game storage |
 | **Netlify Functions + Redis/Upstash + something for WS** | Awkward | Need a realtime edge (e.g. Ably, Pusher, Cloudflare) in addition to functions |
 | **Self-host everything** | Max control | Game Node + LiveKit server on one box; ops burden |
 
 **Recommended default for this project (B):**
 
 ```text
-  Netlify          →  static frontend + livekit-token function
-  Fly/Railway/etc. →  `catan-game` Node service (WS + REST rooms)
-  LiveKit Cloud    →  voice/video only (existing account)
+  Netlify             →  static frontend + livekit-token function
+  Cloudflare Worker   →  create/join HTTP endpoints + WebSocket upgrade
+  Durable Object      →  one authoritative `catan-game` room + active-game storage
+  LiveKit Cloud       →  optional voice/video only (existing account)
 ```
 
-Share rules code by importing `src/rules` from the same monorepo (build step that bundles rules for the server) or a tiny internal package.
+Move the pure engine into a small internal workspace package (for example, `packages/rules`) imported by both the web client and room server. Do not make the server depend directly on browser-oriented source layout.
 
-**v1 persistence:** in-memory rooms are enough for dogfood; lose rooms on deploy. M13 (Redis/SQLite) when you care about reconnect across deploys.
+**V1 persistence:** persist the active room snapshot after every accepted command. A deploy or process restart must not destroy a game in progress. Completed-game history, analytics, and replay storage can remain M13/future work.
 
 ---
 
@@ -240,9 +241,9 @@ Exact prices change; treat this as **relative**, not a quote.
 |-------------|------------------------|---------------------------|
 | **Static hosting (Netlify free/pro)** | Already have | Same |
 | **LiveKit Cloud** | Already need for voice; **also** carries game data volume | Still need for voice if you keep A/V; **less** data-channel traffic |
-| **Game compute** | $0 (host’s device) | Small always-on or scale-to-zero instance: often **~$0–15/mo** hobby; more if always-on multi-region |
+| **Game compute** | $0 (host’s device) | Scale-to-zero Durable Objects for the preferred path; a small always-on instance for conventional Node |
 | **Managed realtime (if used)** | $0 if LiveKit data only | $0 if self WS on VPS; or Ably/etc. if chosen |
-| **Database** | $0 for v1 | $0 in-memory v1; later Redis ~few $/mo |
+| **Database** | $0 for v1 | Durable Object storage for active games; a separate history/analytics database can wait |
 | **Bandwidth** | LiveKit media dominates | Media still dominates if cameras on; game WS is tiny (KB per action) |
 | **Engineering time** | Lower | Higher (real cost for a small team) |
 
@@ -263,7 +264,7 @@ Exact prices change; treat this as **relative**, not a quote.
 ### Bottom line on cost
 
 - **A:** no new server bill; you already pay (or will pay) for **Netlify + LiveKit** if voice tables are on.
-- **B:** adds a **small** always-on or hobby game instance cost; total infra is still dominated by **video** if everyone enables cameras—not by Catan state sync.
+- **B:** adds modest game compute and active-state storage; total infrastructure is still dominated by **video** if everyone enables cameras—not by Catan state sync.
 - For a first friends release, **B’s extra hosting cost is usually negligible** next to LiveKit A/V; the real cost is **build time**.
 
 ---
@@ -283,43 +284,137 @@ Exact prices change; treat this as **relative**, not a quote.
 
 ---
 
-## 8. Suggested decision framing
+## 8. V1 decision and architecture
 
-Ask:
+Build **Approach B** for the product V1:
 
-1. Is v1 **friends-only with a trusted host**, or **anyone at a URL with real privacy**?
-2. Is **“host must keep the tab open”** acceptable product copy?
-3. Do we want LiveKit failure to **block the board**?
-4. Are we willing to run **one small Node service** for 12+ months?
+- One Cloudflare Durable Object is the authoritative owner of each game room.
+- The object owns seats, full engine state, RNG, command ordering, versions, and active-game persistence.
+- Clients submit commands and receive only their seat-scoped `getPlayerView` plus explicitly public events.
+- Joining and playing the game does not require joining LiveKit. Voice/video is an optional sidecar using the same room code.
+- The current host-authoritative LiveKit path may remain temporarily for local development and trusted dogfood, but is not a public release target.
+- If the Workers runtime proves incompatible with the rules package or team preferences, use Colyseus on a conventional Node host. A raw WebSocket service is the last choice because it requires the most custom lifecycle and recovery code.
 
-**Heuristic:**
+### V1 system shape
 
-- Need playable tables **this sprint** with friends who trust each other → **A + privacy fix + join codes**, mark as interim.
-- Need a **first public “real” release** → **B**, LiveKit voice optional/sidecar, Netlify static + small game host.
+```text
+Browser SPA
+  ├── HTTP: create/join room
+  ├── WebSocket: commands, acknowledgements, private snapshots
+  └── LiveKit: optional voice/video
 
-Hybrid (valid): ship A for dogfood, design client command API so swapping host for server is a transport change, not a UI rewrite.
+Cloudflare Worker
+  └── route room code to one Durable Object
+
+Durable Object (one per game)
+  ├── authoritative rules package
+  ├── seat and reconnect tokens
+  ├── serialized command processing
+  ├── stateVersion + command deduplication
+  └── durable active-game snapshot
+```
+
+### Required command contract
+
+Each command carries at least `roomId`, `commandId`, `expectedVersion`, a server-issued seat/session credential, and the rules action. The server acknowledges or rejects every command with its authoritative version. Duplicate command IDs must return the prior result without applying the action twice.
+
+`getPlayerView` is the privacy boundary, but the wire protocol remains an explicit, validated schema rather than an arbitrary serialized engine object.
+
+### Identity and reconnect
+
+The current local-storage participant ID is a UI convenience, not authentication. On join, the server issues an opaque, unguessable reconnect/seat token. It authorizes reclaiming that seat, submitting commands for it, receiving its private view, and requesting appropriately scoped optional-media access. Full user accounts are not required for V1.
+
+### V1 product scope
+
+- Three or four guests create or join a room using a human-friendly code/link.
+- Players claim seats/colors, ready up, and complete the existing full game.
+- Refreshing or briefly disconnecting restores the player's seat and current private view.
+- Host departure does not stop the game; host is a lobby role, not the rules process.
+- Active games survive a service deployment/restart.
+- Voice/video is optional.
+- Explicit leave/abandon and rematch behavior is supported.
+- Multi-client tests prove stale, duplicate, unauthorized, and out-of-turn commands are rejected and hidden state never leaks.
+
+Accounts, public matchmaking, spectators, bots, completed-game history, and replay UI are not V1 requirements.
 
 ---
 
-## 9. Open questions (fill when choosing)
+## 9. Effort relative to the existing project
 
-- [ ] A, B, or A-then-B?
-- [ ] Voice required vs optional at join?
-- [ ] Join code format (e.g. 6 chars) and link shape (`?room=K7M2`)?
-- [ ] Game host provider preference (Fly / Railway / other)?
-- [ ] In-memory only for v1, or Redis from day one?
-- [ ] Spectator seats in v1?
-- [ ] Host transfer in A, or only “room closed”?
+Treat all application, engine, UI, and test work currently completed as a **100% baseline**. Estimated additional work:
+
+| Path | Additional work | Resulting project size |
+|------|----------------:|-----------------------:|
+| Harden current host/LiveKit path | 10–15% | 110–115% |
+| **Cloudflare authoritative V1** | **30–40%** | **130–140%** |
+| Colyseus authoritative V1 | 35–45% | 135–145% |
+| Custom Node + raw WebSockets | 45–60% | 145–160% |
+
+The Cloudflare path is approximately one-third as much work as everything completed so far. Based on this repository's demonstrated AI-assisted pace—not traditional solo-engineer estimates—the working expectation is roughly **8–15 focused hours**, with about **12 hours** as the planning target. External deployment configuration and multi-browser synchronization debugging create more uncertainty than ordinary local feature work.
+
+Approximate Cloudflare phases:
+
+| Phase | Relative work |
+|-------|--------------:|
+| First complete server-backed game | 15–20% |
+| Reconnect, persistence, privacy, and multi-client tests | 10–15% |
+| Deployment verification and production cleanup | 5–10% |
+
+These are planning estimates, not delivery guarantees. Re-estimate after the first vertical slice proves the shared rules package runs correctly inside a Durable Object.
 
 ---
 
-## 10. Doc lifecycle
+## 10. Versioning strategy
 
-This file is **temporary**. When a path is chosen:
+Use **lightweight Semantic Versioning for product releases**, while versioning the network and stored state independently.
 
-1. Fold the decision into a short durable note (e.g. `docs/multiplayer.md`) or TODO M11 preamble.
-2. Delete or archive this options doc so it doesn’t fork the roadmap.
+### Application releases
+
+- Keep one app version for the web client and game service; do not independently version every internal package.
+- Use `0.x.y` while multiplayer contracts and UX are changing rapidly.
+- Increment the minor version for a meaningful playable release and patch for compatible fixes.
+- Tag releases in Git (for example, `v0.1.0`) and expose the version plus Git commit SHA in diagnostics/server logs.
+- Declare `1.0.0` when the public full-game experience, reconnect behavior, privacy guarantees, and operational expectations are considered stable.
+
+Suggested progression:
+
+| Version | Meaning |
+|---------|---------|
+| `0.1.0` | First end-to-end server-authoritative dogfood game |
+| `0.2.0` | Reconnect, persistence, private-state tests, and optional media complete |
+| `0.3.0` | Hosted multiplayer beta with operational hardening |
+| `1.0.0` | Supported public V1 |
+
+SemVer is useful for release communication, rollback, and bug reports, but it does not by itself protect connected clients or persisted games.
+
+### Wire protocol version
+
+Every connection/handshake must carry a small integer `protocolVersion`. The server rejects an incompatible client with a clear refresh/update message. Additive message changes can retain the version; incompatible command or snapshot changes increment it.
+
+For a single deployed web client and server, supporting multiple old protocol versions is not initially necessary. The explicit number still prevents a stale browser tab from silently corrupting a room after deployment.
+
+### Persisted-state schema version
+
+Every stored room snapshot must carry a separate `stateSchemaVersion`. On load, the server either migrates a known older schema or refuses it explicitly and records an actionable error. Never assume the application SemVer or protocol version describes storage compatibility.
+
+The internal rules package does not need its own SemVer unless it is published or consumed by independently released applications. Until then, client and server should build from the same repository revision.
 
 ---
 
-*Generated for discussion on branch `docs/multiplayer-v1-options`. Implementation not included.*
+## 11. Remaining implementation choices
+
+- [ ] Confirm Cloudflare Durable Objects after a short rules-package/runtime spike.
+- [ ] Choose the room code format and link shape (for example, `?room=K7M2`).
+- [ ] Choose reconnect grace and abandoned-game expiration periods.
+- [ ] Define rematch ownership and readiness behavior.
+- [ ] Decide whether to remove the host-authoritative production path immediately or after server dogfood succeeds.
+
+---
+
+## 12. Doc lifecycle
+
+Once implementation begins, fold this recommendation into a durable `docs/multiplayer.md` architecture and the M11–M13 acceptance criteria. Archive or remove obsolete A/B discussion after the server-backed vertical slice is proven so the roadmap has one source of truth.
+
+---
+
+*Updated from the original A/B discussion into the recommended multiplayer V1 direction. Implementation not included.*
