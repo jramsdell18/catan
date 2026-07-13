@@ -216,9 +216,43 @@ Goal: **full engine state is never the multiplayer wire format.** One seat sees 
 
 The local game is understandable, accessible, repeatably testable, and ready to be treated as the stable client foundation.
 
-## Milestone 10: Multiplayer server foundation
+## Milestone 10: Client / hosted UI performance
 
-Begin this milestone only after the local game is complete and engine state can be safely sanitized.
+Make the table feel smooth during play (not just on first load). Tasks are ordered **highest impact first**. Can proceed in parallel with multiplayer work; does **not** depend on a dedicated game server.
+
+Primary pain today: `CatanScene` rebuilds the entire WebGL world when placements, highlights, dice, or hands change—see `src/components/CatanScene.jsx` effect dependencies.
+
+### P0 — largest smoothness gains
+
+- [ ] **Incremental 3D scene updates:** keep one long-lived renderer/scene; update separate groups for hexes, pieces, highlights, racks, and dice instead of dispose+rebuild on every game change.
+- [ ] **Stable board layer:** only rebuild hexes/ports/table when the board seed (or topology) changes; leave pieces/highlights as patchable layers.
+- [ ] **Avoid full texture reload on each rebuild:** cache wood/plastic (and other) textures across updates; do not wait ~1.5s settle after every action.
+
+### P1 — load time and mobile FPS
+
+- [ ] **Compress and modernize table textures:** shrink `wood.jpg` / `plastic.jpg` (today multi‑MB JPEGs); prefer WebP/AVIF or lower resolution; optional solid-color fallback on low-end devices.
+- [ ] **Production renderer flags:** set `preserveDrawingBuffer: false` outside Playwright/tests; cap `devicePixelRatio` on mobile (e.g. 1–1.5).
+- [ ] **Cheaper shadows on small screens:** reduce shadow map size (e.g. 512) or disable shadows on mobile / low power.
+
+### P2 — steady frame time and startup
+
+- [ ] **On-demand rendering:** stop continuous `requestAnimationFrame` when idle; render while OrbitControls damp, dice animate, or highlights pulse.
+- [ ] **Lazy-load LiveKit:** dynamic-import table voice/video only when the player joins a call so the board JS path stays lighter on first paint.
+- [ ] **React boundary around the scene:** memoize `CatanScene` props / split control-panel state so panel updates do not force unnecessary Three.js work.
+
+### P3 — hosting and delivery (first visit)
+
+- [ ] **CDN / cache headers** for hashed Vite assets (Netlify defaults are often fine; verify long-cache for `assets/*`).
+- [ ] **Confirm Brotli/gzip** for JS/CSS on the host.
+- [ ] **Revisit bundle budget** before multiplayer launch (`docs/bundle-size.md`); treat unexpected main-chunk growth as a release gate.
+
+### Done when
+
+Placing pieces, changing highlights, and rolling dice no longer hitch the UI; first load is acceptable on mid-range phones; production builds do not pay for test-only renderer settings.
+
+## Milestone 11: Multiplayer server foundation
+
+Begin once the local client is stable; can overlap with M10 performance work if files stay separated (`CatanScene` vs room/server modules).
 
 - [ ] Choose and document the server runtime, transport, and persistence approach.
 - [ ] Create rooms and human-friendly join codes.
@@ -228,7 +262,7 @@ Begin this milestone only after the local game is complete and engine state can 
 - [ ] Reject malformed, stale, unauthorized, and out-of-turn commands.
 - [ ] Add monotonically increasing state/action versions.
 
-## Milestone 11: Real-time multiplayer and private state
+## Milestone 12: Real-time multiplayer and private state
 
 - [ ] Synchronize commands and public state over WebSockets.
 - [ ] Send each client only `getPlayerView(game, seatId)` (M8 boundary)—never the full engine state.
@@ -238,7 +272,7 @@ Begin this milestone only after the local game is complete and engine state can 
 - [ ] Handle disconnects, abandoned games, and host departure.
 - [ ] Add multiplayer tests using multiple simultaneous clients.
 
-## Milestone 12: Persistence, operations, and security
+## Milestone 13: Persistence, operations, and security
 
 Server-side and ops only (not local browser save).
 
