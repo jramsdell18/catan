@@ -224,15 +224,12 @@ test.describe('setup snake through production turn', () => {
     await startGame(page);
     await completeSetup(page);
 
-    await expect(page.getByTestId('scoreboard')).toBeVisible();
-    await expect(page.getByTestId('score-red')).toContainText('2 settlements');
-    await expect(page.getByTestId('score-total-red')).toHaveText('2 public VP');
-    await expect(page.getByTestId('private-score')).toContainText('2 VP');
-    await expect(page.getByTestId('longest-road-owner')).toContainText('Unclaimed');
-    await expect(page.getByTestId('largest-army-owner')).toContainText('Unclaimed');
+    await expect(page.getByTestId('scoreboard')).toHaveCount(0);
+    await expect(page.getByTestId('player-public-vp-red')).toContainText('2');
+    await expect(page.getByTestId('player-development-count-red')).toContainText('0');
 
     await page.evaluate(() => window.__CATAN_TEST_API.prepareVictory('red'));
-    await expect(page.getByTestId('private-score')).toContainText('10 VP');
+    await expect(page.getByTestId('player-public-vp-red')).toContainText('10');
     await page.getByTestId('end-turn').click();
     await expect.poll(async () => (await getTestState(page)).phase).toBe('gameOver');
     expect((await getTestState(page)).winnerId).toBe('red');

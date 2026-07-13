@@ -4,7 +4,7 @@ export const TERRAIN_TYPES = {
     label: 'Forest',
     resource: 'wood',
     count: 4,
-    color: '#2f7d4f',
+    color: '#167a3e',
     textColor: '#f7fbf2',
   },
   fields: {
@@ -12,7 +12,7 @@ export const TERRAIN_TYPES = {
     label: 'Fields',
     resource: 'hay',
     count: 4,
-    color: '#d8b541',
+    color: '#f0c928',
     textColor: '#211a08',
   },
   hills: {
@@ -20,7 +20,7 @@ export const TERRAIN_TYPES = {
     label: 'Hills',
     resource: 'brick',
     count: 3,
-    color: '#b85c38',
+    color: '#d64b2f',
     textColor: '#fff7ef',
   },
   mountains: {
@@ -28,7 +28,7 @@ export const TERRAIN_TYPES = {
     label: 'Mountains',
     resource: 'ore',
     count: 3,
-    color: '#707979',
+    color: '#5867a3',
     textColor: '#ffffff',
   },
   pasture: {
@@ -36,7 +36,7 @@ export const TERRAIN_TYPES = {
     label: 'Pasture',
     resource: 'sheep',
     count: 4,
-    color: '#82a957',
+    color: '#8ed34f',
     textColor: '#16220d',
   },
   desert: {
@@ -44,7 +44,7 @@ export const TERRAIN_TYPES = {
     label: 'Desert',
     resource: null,
     count: 1,
-    color: '#d5a46b',
+    color: '#d7a45f',
     textColor: '#24160b',
   },
 };

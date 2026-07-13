@@ -114,13 +114,35 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 }
 
 .player-state.active { border-left-color: #d9a441; background: #fffaf0; }
-.player-state strong,
+.player-state > strong,
 .player-state span { min-width: 0; overflow-wrap: anywhere; }
 
-.player-state .public-vp {
-  color: #5d6b64;
-  font-size: 0.78rem;
-  font-weight: 700;
+.player-stat-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.player-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  width: fit-content;
+  min-height: 1.35rem;
+  border: 1px solid rgba(23, 33, 29, 0.14);
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem 0.12rem 0.16rem;
+  background: rgba(255, 250, 240, 0.82);
+  color: #31423b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.player-stat-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #d9a441;
+  color: #25190f;
+  font-size: 0.52rem;
+  letter-spacing: 0;
 }
 
 .player-state[data-private='true'] [data-testid^='player-resources-'] {
@@ -229,26 +251,6 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
 .development-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; }
 .road-building-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; border-radius: 7px; padding: 0.65rem; background: #e8f4fb; }
 
-.scoreboard {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-  border: 1px solid rgba(23, 33, 29, 0.14);
-  border-radius: 8px;
-  padding: 0.85rem;
-  background: rgba(255, 255, 255, 0.78);
-}
-.scoreboard-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; }
-.scoreboard-heading h2 { margin: 0; font-size: 1.15rem; }
-.award-summary { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.award-summary span,
-.award-badge { border-radius: 999px; padding: 0.35rem 0.6rem; background: #fff3c9; font-size: 0.78rem; }
-.score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.55rem; }
-.score-card { display: grid; gap: 0.28rem; border-left: 4px solid transparent; border-radius: 6px; padding: 0.7rem; background: #fffaf0; font-size: 0.82rem; }
-.score-card.active { border-left-color: #d9a441; }
-.score-card-title { display: flex; justify-content: space-between; gap: 0.5rem; }
-.private-score { margin-top: 0.25rem; border-top: 1px solid rgba(23, 33, 29, 0.12); padding-top: 0.45rem; color: #155b38; }
-
 .game-over-overlay {
   position: absolute;
   top: 50%;
@@ -292,7 +294,6 @@ h1 { margin: 0; font-size: 2.5rem; line-height: 1; }
   .control-actions { grid-column: 2; }
   .table-meta { grid-column: 3; grid-template-columns: 1fr; }
   .resource-strip { grid-column: 1 / -1; }
-  .scoreboard { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {

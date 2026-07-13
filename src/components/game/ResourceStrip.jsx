@@ -13,6 +13,17 @@ function formatHand(player) {
   return count === 1 ? '1 card' : `${count} cards`;
 }
 
+function getVictoryPoints(player) {
+  if (player.isSelf && typeof player.privateVictoryPoints === 'number') {
+    return player.privateVictoryPoints;
+  }
+  return player.publicVictoryPoints ?? player.score?.publicTotal ?? 0;
+}
+
+function getDevelopmentCardCount(player) {
+  return player.developmentCardCount ?? player.developmentCards?.length ?? 0;
+}
+
 function ResourceStrip({ game, playerView = null }) {
   const source = playerView ?? game;
   if (!source) return null;
@@ -32,14 +43,26 @@ function ResourceStrip({ game, playerView = null }) {
         >
           <strong>{player.name}</strong>
           <span data-testid={`player-resources-${player.id}`}>{formatHand(player)}</span>
-          {typeof player.publicVictoryPoints === 'number' && (
-            <span className="public-vp" data-testid={`player-public-vp-${player.id}`}>
-              {player.publicVictoryPoints} VP
-              {player.isSelf && typeof player.privateVictoryPoints === 'number'
-                ? ` (${player.privateVictoryPoints} private)`
-                : ''}
+          <div className="player-stat-row" aria-label={`${player.name} counters`}>
+            <span
+              className="player-stat-pill"
+              title="Victory points"
+              aria-label={`Victory points: ${getVictoryPoints(player)}`}
+              data-testid={`player-public-vp-${player.id}`}
+            >
+              <span className="player-stat-icon" aria-hidden="true">VP</span>
+              <strong>{getVictoryPoints(player)}</strong>
             </span>
-          )}
+            <span
+              className="player-stat-pill"
+              title="Development cards"
+              aria-label={`Development cards: ${getDevelopmentCardCount(player)}`}
+              data-testid={`player-development-count-${player.id}`}
+            >
+              <span className="player-stat-icon" aria-hidden="true">D</span>
+              <strong>{getDevelopmentCardCount(player)}</strong>
+            </span>
+          </div>
         </div>
       ))}
     </div>

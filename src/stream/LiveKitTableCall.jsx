@@ -36,6 +36,7 @@ function LiveKitTableCall({
   const [participants, setParticipants] = useState([]);
   const [activeSpeakerIds, setActiveSpeakerIds] = useState(() => new Set());
   const [needsAudioStart, setNeedsAudioStart] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(true);
 
   const roomInfo = useMemo(() => ensureRoomInfo(), []);
   const roomName = roomInfo.roomName;
@@ -186,6 +187,7 @@ function LiveKitTableCall({
   function handleLeave() {
     disposeRoom();
     setConnectionState('idle');
+    setControlsCollapsed(true);
     setStatusMessage('Call ended.');
   }
 
@@ -264,6 +266,7 @@ function LiveKitTableCall({
     setParticipants([]);
     setActiveSpeakerIds(new Set());
     setNeedsAudioStart(false);
+    setControlsCollapsed(true);
   }
 
   return (
@@ -286,26 +289,51 @@ function LiveKitTableCall({
 
       <div className="livekit-call-widget">
         {isJoined ? (
-          <div className="livekit-control-strip" aria-label="LiveKit call controls">
-            <strong>{localParticipant?.name || selectedPlayer?.label || 'Joined'}</strong>
-            <button type="button" onClick={handleToggleMicrophone}>
-              {localParticipant?.isMicrophoneEnabled ? 'Mute' : 'Unmute'}
+          controlsCollapsed ? (
+            <button
+              type="button"
+              className={`livekit-collapse-toggle${localParticipant?.isMicrophoneEnabled ? '' : ' is-muted'}`}
+              onClick={() => setControlsCollapsed(false)}
+              aria-label="Open voice controls"
+              title="Open voice controls"
+              data-testid="open-voice-controls"
+            >
+              <span aria-hidden="true">{localParticipant?.isMicrophoneEnabled ? 'Mic' : 'Mute'}</span>
             </button>
-            <button type="button" onClick={handleToggleCamera}>
-              {localParticipant?.isCameraEnabled ? 'Camera off' : 'Camera on'}
-            </button>
-            {needsAudioStart && (
-              <button type="button" onClick={handleStartAudio}>
-                Start audio
+          ) : (
+            <div className="livekit-control-strip" aria-label="LiveKit call controls">
+              <div className="livekit-control-heading">
+                <strong>{localParticipant?.name || selectedPlayer?.label || 'Joined'}</strong>
+                <button
+                  type="button"
+                  className="livekit-icon-button"
+                  onClick={() => setControlsCollapsed(true)}
+                  aria-label="Collapse voice controls"
+                  title="Collapse voice controls"
+                  data-testid="collapse-voice-controls"
+                >
+                  -
+                </button>
+              </div>
+              <button type="button" onClick={handleToggleMicrophone}>
+                {localParticipant?.isMicrophoneEnabled ? 'Mute' : 'Unmute'}
               </button>
-            )}
-            <button type="button" className="secondary-button" onClick={handleCopyInvite}>
-              Copy invite
-            </button>
-            <button type="button" className="secondary-button" onClick={handleLeave}>
-              Leave
-            </button>
-          </div>
+              <button type="button" onClick={handleToggleCamera}>
+                {localParticipant?.isCameraEnabled ? 'Camera off' : 'Camera on'}
+              </button>
+              {needsAudioStart && (
+                <button type="button" onClick={handleStartAudio}>
+                  Start audio
+                </button>
+              )}
+              <button type="button" className="secondary-button" onClick={handleCopyInvite}>
+                Copy invite
+              </button>
+              <button type="button" className="secondary-button" onClick={handleLeave}>
+                Leave
+              </button>
+            </div>
+          )
         ) : (
           <form className="livekit-join-panel" onSubmit={handleJoin}>
             <div>
@@ -346,9 +374,11 @@ function LiveKitTableCall({
           </form>
         )}
 
-        <p className="livekit-status" role="status" aria-live="polite">
-          {statusMessage}
-        </p>
+        {(!isJoined || !controlsCollapsed || statusMessage) && (
+          <p className="livekit-status" role="status" aria-live="polite">
+            {statusMessage}
+          </p>
+        )}
       </div>
 
       <div ref={audioHostRef} className="livekit-audio-outlet" aria-hidden="true" />

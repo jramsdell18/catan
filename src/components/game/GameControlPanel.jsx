@@ -7,7 +7,6 @@ import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 import TradeControls from './TradeControls.jsx';
 import DevelopmentControls from './DevelopmentControls.jsx';
-import Scoreboard from './Scoreboard.jsx';
 
 function GameControlPanel(props) {
   const { game, playerView = null, viewerId = null, sharedDeviceMode = true } = props;
@@ -75,7 +74,6 @@ function GameControlPanel(props) {
         </p>
       )}
       <TableMeta game={game} boardSeed={props.boardSeed} currentPlayer={props.currentPlayer} totalCards={props.totalCards} />
-      <Scoreboard playerView={playerView} />
       <ResourceStrip game={game} playerView={playerView} />
       <ActionHistory game={game} />
     </section>
