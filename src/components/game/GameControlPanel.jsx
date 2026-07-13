@@ -6,6 +6,8 @@ import RollOutcome from './RollOutcome.jsx';
 import TableMeta from './TableMeta.jsx';
 import TurnSummary from './TurnSummary.jsx';
 import TradeControls from './TradeControls.jsx';
+import DevelopmentControls from './DevelopmentControls.jsx';
+import Scoreboard from './Scoreboard.jsx';
 
 function GameControlPanel(props) {
   const { game, playerView = null } = props;
@@ -24,7 +26,20 @@ function GameControlPanel(props) {
         onChooseDifferentHex={props.onChooseDifferentRobberHex}
       />
       <RollOutcome game={game} playerView={playerView} />
-      {props.isViewerTurn && <TradeControls game={game} onAction={props.onTradeAction} />}
+      {props.isViewerTurn && (
+        <>
+          <TradeControls game={game} onAction={props.onTradeAction} />
+          <DevelopmentControls
+            game={game}
+            playerView={playerView}
+            onAction={props.onDevelopmentAction}
+            onBeginRoadBuilding={props.onBeginRoadBuilding}
+            selectedRoadCount={props.selectedRoadBuildingEdges.length}
+            onFinishRoadBuilding={props.onFinishRoadBuilding}
+            onCancelRoadBuilding={props.onCancelRoadBuilding}
+          />
+        </>
+      )}
       <div className="control-actions">
         <button type="button" data-testid="roll-dice" onClick={props.onRollDice} disabled={game?.phase !== 'roll' || !props.isViewerTurn}>Roll Dice</button>
         <button type="button" data-testid="end-turn" onClick={props.onEndTurn} disabled={!actionPhase || !props.isViewerTurn}>End Turn</button>
@@ -52,6 +67,7 @@ function GameControlPanel(props) {
         </p>
       )}
       <TableMeta game={game} boardSeed={props.boardSeed} currentPlayer={props.currentPlayer} totalCards={props.totalCards} />
+      <Scoreboard playerView={playerView} />
       <ResourceStrip game={game} playerView={playerView} />
       <ActionHistory game={game} />
     </section>

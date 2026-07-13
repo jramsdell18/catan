@@ -166,6 +166,21 @@ function addProductionHighlights(world, board, productionTileIds, animatedHighli
   world.add(group);
 }
 
+function addPendingRoadHighlights(world, topology, edgeIds, animatedHighlights) {
+  const group = new THREE.Group();
+  group.name = 'pending-road-building';
+  edgeIds.forEach((edgeId) => {
+    const edge = topology.edges.find((item) => item.id === edgeId);
+    if (!edge) return;
+    const highlight = createRoadHighlightMesh(edge.length, '#63b3ed');
+    highlight.position.set(edge.x, 0.34, edge.z);
+    highlight.rotation.y = edge.rotation;
+    animatedHighlights.push(highlight);
+    group.add(highlight);
+  });
+  world.add(group);
+}
+
 const PLAYER_RACK_SPOTS = [
   { x: 0, z: 7.25, rotation: 0 },
   { x: 0, z: -7.25, rotation: Math.PI },
@@ -364,6 +379,7 @@ function CatanScene({
   onSelectTarget,
   diceRoll,
   productionTileIds,
+  pendingRoadEdgeIds,
 }) {
   const containerRef = useRef(null);
   const cameraStateRef = useRef(null);
@@ -504,6 +520,7 @@ function CatanScene({
     addPlacedPieces(world, activePlayers, topology, placements);
     addBoardHighlights(world, legalTargets, interactionMode, interactionTargets);
     addProductionHighlights(world, board, productionTileIds, animatedHighlights);
+    addPendingRoadHighlights(world, topology, pendingRoadEdgeIds, animatedHighlights);
     animatedHighlights.push(...interactionTargets);
     addPlayerAreas(world, activePlayers, resourceHands, playerInventories);
     addDiceArea(world, diceRoll, animatedDice);
@@ -518,6 +535,7 @@ function CatanScene({
       placedSettlements: placements.settlements.length,
       placedCities: placements.cities.length,
       productionHighlights: productionTileIds.length,
+      pendingRoads: pendingRoadEdgeIds.length,
       dice: getDiceValues(diceRoll),
       worldChildren: world.children.length,
     };
@@ -655,6 +673,7 @@ function CatanScene({
     placements,
     playerInventories,
     ports,
+    pendingRoadEdgeIds,
     productionTileIds,
     resourceHands,
     robberTileId,

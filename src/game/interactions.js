@@ -6,6 +6,7 @@ export const INTERACTION_MODES = Object.freeze({
   PLACE_SETTLEMENT: 'placeSettlement',
   BUILD_CITY: 'buildCity',
   MOVE_ROBBER: 'moveRobber',
+  ROAD_BUILDING: 'roadBuilding',
 });
 
 export const INTERACTION_LABELS = Object.freeze({
@@ -13,6 +14,7 @@ export const INTERACTION_LABELS = Object.freeze({
   placeSettlement: 'Select a legal intersection for the settlement.',
   buildCity: 'Select one of your settlements to upgrade.',
   moveRobber: 'Select a different hex for the robber.',
+  roadBuilding: 'Select one or two connected edges for free roads.',
 });
 
 export function getInteractionMode(game, requestedMode = null) {
@@ -38,7 +40,7 @@ export function getLegalTargets(game, topology, board, mode) {
     };
   }
 
-  if (mode === INTERACTION_MODES.PLACE_ROAD) {
+  if (mode === INTERACTION_MODES.PLACE_ROAD || mode === INTERACTION_MODES.ROAD_BUILDING) {
     const setupIntersectionId = game.phase === 'setup' ? game.setupSettlementId : null;
     return {
       ...empty,

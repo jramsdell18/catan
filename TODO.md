@@ -1,6 +1,8 @@
 # Catan development roadmap
 
-This roadmap is ordered by dependency and delivery value. Finish each milestone before moving to the next unless a task is explicitly optional. The first major target is a complete local game; online multiplayer follows after the local rules and UI are stable.
+This roadmap is ordered by dependency and delivery value. Finish each milestone before moving to the next unless a task is explicitly optional.
+
+**Product direction:** the primary target is a **live multiplayer** game (play until victory or abandon). Local play is the development client. Optional local conveniences (pass-and-play handoff, save/resume) are deferred to a low-priority future milestone—not required for multiplayer readiness.
 
 ## Milestone 0: Current foundation
 
@@ -128,16 +130,16 @@ Players can perform every legal bank, port, and player trade without directly ed
 
 ## Milestone 6: Development cards
 
-- [ ] Add a Buy Development Card control with its cost and availability.
-- [ ] Display development cards privately to their owner.
-- [ ] Indicate cards bought this turn that cannot yet be played.
-- [ ] Add the Knight workflow using the robber interaction mode.
-- [ ] Add resource selection for Year of Plenty.
-- [ ] Add resource selection for Monopoly.
-- [ ] Add one-or-two-road placement for Road Building.
-- [ ] Keep victory-point cards hidden while including them in scoring.
-- [ ] Enforce the one-development-card-per-turn rule in the UI.
-- [ ] Add UI integration tests for buying and playing every development-card type.
+- [x] Add a Buy Development Card control with its cost and availability.
+- [x] Display development cards privately to their owner.
+- [x] Indicate cards bought this turn that cannot yet be played.
+- [x] Add the Knight workflow using the robber interaction mode.
+- [x] Add resource selection for Year of Plenty.
+- [x] Add resource selection for Monopoly.
+- [x] Add one-or-two-road placement for Road Building.
+- [x] Keep victory-point cards hidden while including them in scoring.
+- [x] Enforce the one-development-card-per-turn rule in the UI.
+- [x] Add UI integration tests for buying and playing every development-card type.
 
 ### Done when
 
@@ -145,34 +147,56 @@ Every development card supported by the engine can be bought, privately inspecte
 
 ## Milestone 7: Scoring, awards, and game completion
 
-- [ ] Display public settlement and city points.
-- [ ] Display Longest Road owner and length.
-- [ ] Display Largest Army owner and knight count.
-- [ ] Show each player their private victory-point total.
-- [ ] Add focused engine tests for branching roads, loops, blocked roads, award transfers, and hidden victory points.
-- [ ] Show a game-over screen when a player reaches the configured victory target.
-- [ ] Display the winner and final public scores.
-- [ ] Add confirmed Restart Game and New Game actions.
-- [ ] Add an automated end-to-end scenario that reaches a legal victory.
+- [x] Display public settlement and city points.
+- [x] Display Longest Road owner and length.
+- [x] Display Largest Army owner and knight count.
+- [x] Show each player their private victory-point total.
+- [x] Add focused engine tests for branching roads, loops, blocked roads, award transfers, and hidden victory points.
+- [x] Add `getScoreBreakdown` / `publicVictoryPoints` helpers for scoreboard UI.
+- [x] Show a game-over screen when a player reaches the configured victory target.
+- [x] Display the winner and final public scores.
+- [x] Add confirmed Restart Game and New Game actions.
+- [x] Add an automated end-to-end scenario that reaches a legal victory.
 
 ### Done when
 
 A local game can proceed from setup through a rules-validated victory without unsupported phases or manual state changes.
 
-## Milestone 8: Local-game privacy and persistence
+## Milestone 8: Multiplayer-ready privacy boundary
 
-- [ ] Add a pass-device screen between local players.
-- [x] Hide resource identities belonging to other players. *(engine view + ResourceStrip)*
-- [x] Hide development cards belonging to other players. *(engine view; private hand UI later)*
-- [ ] Require confirmation before revealing the active player's private view.
+Goal: **full engine state is never the multiplayer wire format.** One seat sees only what `getPlayerView(game, playerId)` allows. This is the shared contract for the local UI today and for server→client payloads later (M10–11).
+
+### Engine / contract
+
 - [x] Implement `getPlayerView(game, playerId)` as the shared state-sanitization boundary.
-- [x] Wire seat view into UI (`usePlayerView` → ResourceStrip / RollOutcome).
-- [ ] Add save and resume support for a local game.
-- [x] Add tests that private cards never appear in another player's view.
+- [x] Hide opponent resource breakdowns (`resources: null`, public `resourceCount` only).
+- [x] Hide opponent development card types (`developmentCards: null`, public count only).
+- [x] Never expose development-deck composition (count only).
+- [x] Split public vs private VP (`publicVictoryPoints` / `privateVictoryPoints`).
+- [x] Redact production/robbery details that would leak private cards to bystanders.
+- [x] Unit tests that private card identities never appear in another player's view.
+- [x] Document the privacy contract in `src/rules/README.md`.
 
-### Done when
+### Client usage (local app as reference multiplayer client)
 
-Players can complete a pass-and-play game on one device without casually exposing private hands, and can resume an interrupted game.
+- [x] Derive seat UI from `usePlayerView` / `getPlayerView` for hands and private outcomes (`ResourceStrip`, `RollOutcome`, scoreboard private total).
+- [x] Keep `applyAction` on **full** authoritative state (view is display-only; never the rules source of truth).
+- [ ] Audit remaining UI so no component reads `game.players[*].resources` or `.developmentCards` for **non-viewer** seats when rendering (discard forms for the acting seat may still use full state on a shared device until true multi-client).
+- [ ] Treat “send `getPlayerView` per connected seat” as the required multiplayer transport rule when M10/M11 start (no full-state broadcast).
+
+### Explicitly out of scope for M8 (see Future milestone)
+
+- Pass-and-play device handoff / “reveal seat” confirmation  
+- Local save / resume to `localStorage`  
+- Online reconnect and server-side game persistence (M11–12)
+
+### Done when (multiplayer readiness)
+
+- [x] A single function defines what one player is allowed to know.
+- [x] Tests lock the non-leak guarantees for hands, VP cards, and deck.
+- [x] The local client already demonstrates view-based rendering for the main private surfaces.
+- [ ] Remaining UI audit complete (checkbox above).
+- [ ] Multiplayer milestones reference this boundary instead of inventing a second sanitizer.
 
 ## Milestone 9: Local release quality
 
@@ -182,7 +206,7 @@ Players can complete a pass-and-play game on one device without casually exposin
 - [ ] Test the complete game on desktop and mobile viewports.
 - [ ] Add deterministic test-board and dice controls available only in development/test builds.
 - [ ] Resolve production bundle-size warnings or document the accepted tradeoff.
-- [ ] Run `npm test`, `npm run test:render`, and `npm run build` in CI.
+- [x] Run `npm test`, board-rules, Playwright e2e, and `npm run build` in CI (`.github/workflows/ci.yml`).
 
 ### Done when
 
@@ -203,7 +227,7 @@ Begin this milestone only after the local game is complete and engine state can 
 ## Milestone 11: Real-time multiplayer and private state
 
 - [ ] Synchronize commands and public state over WebSockets.
-- [ ] Send each client only its sanitized player view.
+- [ ] Send each client only `getPlayerView(game, seatId)` (M8 boundary)—never the full engine state.
 - [ ] Broadcast public events without leaking hidden resources or development cards.
 - [ ] Restore identity after a page refresh.
 - [ ] Reconnect players to the latest state.
@@ -211,6 +235,8 @@ Begin this milestone only after the local game is complete and engine state can 
 - [ ] Add multiplayer tests using multiple simultaneous clients.
 
 ## Milestone 12: Persistence, operations, and security
+
+Server-side and ops only (not local browser save).
 
 - [ ] Persist active games and restore them after a server restart.
 - [ ] Optionally store completed-game history and replays.
@@ -223,10 +249,19 @@ Begin this milestone only after the local game is complete and engine state can 
 
 Three or four players on separate clients can join a room, complete a game, reconnect safely, and never receive another player's hidden information.
 
+## Future (low priority): Local convenience
+
+Not required for multiplayer. Build only if local hot-seat or long offline sessions become a product goal.
+
+- [ ] Pass-and-play screen between local players (hide previous seat before next views private UI).
+- [ ] Confirmation before revealing the active player's private view on a shared device.
+- [ ] Local save / resume of a single-device game (`localStorage` or file dump of engine state).
+- [ ] Dev-only state export for bug reports.
+
 ## Verification commands
 
 ```bash
 npm test
-npm run test:render
+npm run test:ci   # unit + board-rules + build + e2e (mirrors GitHub Actions)
 npm run build
 ```

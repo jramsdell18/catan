@@ -15,8 +15,10 @@
     "test:e2e": "playwright test",
     "test:e2e:flow": "playwright test tests/game-flow.spec.js",
     "test:render": "playwright test tests/three-render.spec.js",
-    "test:all": "npm run test && npm run test:rules && npm run test:e2e"
+    "test:all": "npm run test && npm run test:rules && npm run test:e2e",
+    "test:ci": "npm run test && npm run test:rules && npm run build && npm run test:e2e"
   },
+
   "dependencies": {
     "jose": "^6.2.3",
     "livekit-client": "^2.20.1",

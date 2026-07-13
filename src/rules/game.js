@@ -60,6 +60,7 @@ export function createGame({ players, board, random = Math.random }) {
     lastRobbery: null,
     tradeOffer: null,
     lastTrade: null,
+    lastDevelopment: null,
     longestRoadPlayerId: null,
     largestArmyPlayerId: null,
     winnerId: null,
@@ -267,7 +268,9 @@ function buyDevelopment(state, action) {
   if (!state.developmentDeck.length) throw new Error('Development deck is empty.');
   const player = currentPlayer(state);
   transferCost(state, player, BUILDING_COSTS.development);
-  player.developmentCards.push({ type: state.developmentDeck.pop(), boughtTurn: state.turnIndex });
+  const type = state.developmentDeck.pop();
+  player.developmentCards.push({ type, boughtTurn: state.turnIndex });
+  state.lastDevelopment = { type: 'bought', playerId: action.playerId };
 }
 
 function playDevelopment(state, action) {
@@ -282,19 +285,25 @@ function playDevelopment(state, action) {
   if (action.card === 'knight') {
     player.playedKnights += 1;
     state.phase = 'robber';
+    state.lastDevelopment = { type: 'played', playerId: action.playerId, card: 'knight' };
   } else if (action.card === 'yearOfPlenty') {
     if (!Array.isArray(action.resources) || action.resources.length !== 2) throw new Error('Choose two resources.');
     giveFromBank(state, player, action.resources.reduce((bundle, resource) => ({ ...bundle, [resource]: (bundle[resource] ?? 0) + 1 }), {}));
+    state.lastDevelopment = { type: 'played', playerId: action.playerId, card: 'yearOfPlenty', resources: [...action.resources] };
   } else if (action.card === 'monopoly') {
     if (!RESOURCE_TYPES.includes(action.resource)) throw new Error('Choose a valid resource.');
+    let collected = 0;
     for (const opponent of state.players.filter((p) => p.id !== player.id)) {
+      collected += opponent.resources[action.resource];
       player.resources[action.resource] += opponent.resources[action.resource];
       opponent.resources[action.resource] = 0;
     }
+    state.lastDevelopment = { type: 'played', playerId: action.playerId, card: 'monopoly', resource: action.resource, collected };
   } else if (action.card === 'roadBuilding') {
     const edgeIds = action.edgeIds ?? [];
     if (edgeIds.length < 1 || edgeIds.length > 2) throw new Error('Choose one or two roads.');
     for (const edgeId of edgeIds) placeRoad(state, { playerId: action.playerId, edgeId }, true);
+    state.lastDevelopment = { type: 'played', playerId: action.playerId, card: 'roadBuilding', edgeIds: [...edgeIds] };
   }
 }
 

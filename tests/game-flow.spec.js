@@ -205,6 +205,7 @@ test.describe('setup snake through production turn', () => {
       .poll(async () => (await getTestState(page)).settlementCount)
       .toBe(1);
 
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByTestId('restart-game').click();
     await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
 
@@ -213,6 +214,35 @@ test.describe('setup snake through production turn', () => {
     expect(restarted.roadCount).toBe(0);
     expect(restarted.phase).toBe('setup');
     expect(restarted.currentPlayerId).toBe('red');
+  });
+
+  test('shows scoring and completes a rules-validated victory', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+
+    await expect(page.getByTestId('scoreboard')).toBeVisible();
+    await expect(page.getByTestId('score-red')).toContainText('2 settlements');
+    await expect(page.getByTestId('score-total-red')).toHaveText('2 public VP');
+    await expect(page.getByTestId('private-score')).toContainText('2 VP');
+    await expect(page.getByTestId('longest-road-owner')).toContainText('Unclaimed');
+    await expect(page.getByTestId('largest-army-owner')).toContainText('Unclaimed');
+
+    await page.evaluate(() => window.__CATAN_TEST_API.prepareVictory('red'));
+    await expect(page.getByTestId('private-score')).toContainText('10 VP');
+    await page.getByTestId('end-turn').click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('gameOver');
+    expect((await getTestState(page)).winnerId).toBe('red');
+    await expect(page.getByTestId('game-over')).toContainText('Red wins!');
+    await expect(page.getByTestId('final-score-red')).toContainText('10 private VP');
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByTestId('new-game').click();
+    await expect(page.getByTestId('start-game')).toBeDisabled();
+    expect((await getTestState(page)).phase).toBeNull();
   });
 
   test('builds roads, a settlement, and a city through the action controls', async ({ page }) => {
@@ -372,5 +402,79 @@ test.describe('setup snake through production turn', () => {
     await page.getByTestId('offer-trade').click();
     await page.getByTestId('cancel-trade').click();
     await expect(page.getByTestId('pending-trade')).toBeHidden();
+  });
+
+  test('buys and plays every development card workflow', async ({ page }) => {
+    test.setTimeout(150_000);
+    await page.goto('/');
+    await waitForTestApi(page);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+    await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+    await page.getByTestId('toggle-development').click();
+
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.giveDevelopmentCard('red', 'yearOfPlenty');
+      window.__CATAN_TEST_API.giveDevelopmentCard('red', 'monopoly');
+    });
+    const beforePlenty = await getTestState(page);
+    await page.getByLabel('Year of Plenty resource 1').selectOption('wood');
+    await page.getByLabel('Year of Plenty resource 2').selectOption('brick');
+    await page.getByRole('button', { name: 'Play Year of Plenty' }).click();
+    await expect.poll(async () => (await getTestState(page)).resources.red.wood).toBe(beforePlenty.resources.red.wood + 1);
+    expect((await getTestState(page)).resources.red.brick).toBe(beforePlenty.resources.red.brick + 1);
+    await expect(page.getByRole('button', { name: 'Play Monopoly' })).toBeDisabled();
+
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.resetDevelopmentPlay();
+      window.__CATAN_TEST_API.giveResources('blue', { sheep: 2 });
+    });
+    await page.getByLabel('Monopoly resource').selectOption('sheep');
+    await page.getByRole('button', { name: 'Play Monopoly' }).click();
+    await expect.poll(async () => (await getTestState(page)).resources.blue.sheep).toBe(0);
+    expect((await getTestState(page)).resources.white.sheep).toBe(0);
+
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.resetDevelopmentPlay();
+      window.__CATAN_TEST_API.giveDevelopmentCard('red', 'knight');
+    });
+    await page.getByRole('button', { name: 'Play Knight' }).click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('robber');
+    const robberState = await getTestState(page);
+    const robberTarget = robberState.robberOptions[0];
+    await page.evaluate((tileId) => window.__CATAN_TEST_API.selectTarget(tileId), robberTarget.tileId);
+    if (robberTarget.victimIds.length > 0) await page.getByTestId(`rob-victim-${robberTarget.victimIds[0]}`).click();
+    await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.resetDevelopmentPlay();
+      window.__CATAN_TEST_API.giveDevelopmentCard('red', 'roadBuilding');
+    });
+    const beforeRoads = await getTestState(page);
+    await page.getByRole('button', { name: 'Play Road Building' }).click();
+    let roadState = await getTestState(page);
+    await page.evaluate((edgeId) => window.__CATAN_TEST_API.selectTarget(edgeId), roadState.roadOptions[0]);
+    await expect.poll(async () => (await getTestState(page)).selectedRoadBuildingEdges.length).toBe(1);
+    roadState = await getTestState(page);
+    await page.evaluate((edgeId) => window.__CATAN_TEST_API.selectTarget(edgeId), roadState.roadOptions[0]);
+    await expect.poll(async () => (await getTestState(page)).roadCount).toBe(beforeRoads.roadCount + 2);
+    const afterRoads = await getTestState(page);
+    expect(afterRoads.resources.red.wood).toBe(beforeRoads.resources.red.wood);
+    expect(afterRoads.resources.red.brick).toBe(beforeRoads.resources.red.brick);
+
+    await page.evaluate(() => {
+      window.__CATAN_TEST_API.resetDevelopmentPlay();
+      window.__CATAN_TEST_API.giveDevelopmentCard('red', 'victoryPoint');
+      window.__CATAN_TEST_API.giveResources('red', { ore: 1, hay: 1, sheep: 1 });
+    });
+    await expect(page.getByTestId('development-card-victoryPoint')).toContainText('Private victory point');
+    const beforeBuy = await getTestState(page);
+    await page.getByTestId('buy-development').click();
+    await expect.poll(async () => (await getTestState(page)).developmentDeckCount).toBe(beforeBuy.developmentDeckCount - 1);
+    const afterBuy = await getTestState(page);
+    expect(afterBuy.developmentCards.red.length).toBe(beforeBuy.developmentCards.red.length + 1);
+    await expect(page.getByText('Bought this turn', { exact: true })).toBeVisible();
   });
 });
