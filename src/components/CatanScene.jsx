@@ -18,6 +18,47 @@ import {
   createSettlementMesh,
 } from '../three/meshFactories.js';
 
+const sharedTextureCache = new Map();
+
+function getSharedTexture(url, configureTexture, onReady) {
+  let record = sharedTextureCache.get(url);
+
+  if (!record) {
+    record = {
+      texture: null,
+      loaded: false,
+      failed: false,
+      callbacks: [],
+    };
+    sharedTextureCache.set(url, record);
+
+    const loader = new THREE.TextureLoader();
+    record.texture = loader.load(
+      url,
+      () => {
+        record.loaded = true;
+        record.callbacks.splice(0).forEach((callback) => callback(record.texture));
+      },
+      undefined,
+      () => {
+        record.failed = true;
+        record.callbacks.splice(0).forEach((callback) => callback(record.texture));
+      },
+    );
+    record.texture.userData.sharedAsset = true;
+  }
+
+  configureTexture(record.texture);
+
+  if (record.loaded || record.failed) {
+    onReady(record.texture);
+  } else {
+    record.callbacks.push(onReady);
+  }
+
+  return record.texture;
+}
+
 function disposeScene(scene) {
   scene.traverse((child) => {
     if (!child.isMesh && !child.isSprite && !child.isLine) {
@@ -159,7 +200,10 @@ function addProductionHighlights(world, board, productionTileIds, animatedHighli
     const hex = board.hexes.find((item) => item.hexId === tileId);
     if (!hex) return;
     const highlight = createHexOutlineHighlightMesh();
-    highlight.position.set(hex.world.x, 0.34, hex.world.z);
+    const baseY = 0.18;
+    highlight.position.set(hex.world.x, baseY, hex.world.z);
+    highlight.userData.baseY = baseY;
+    highlight.userData.riseAmount = 0.035;
     animatedHighlights.push(highlight);
     group.add(highlight);
   });
@@ -399,7 +443,6 @@ function CatanScene({
     window.__CATAN_RENDER_READY = false;
     window.__CATAN_RENDER_STATS = null;
     window.__CATAN_ACTIVE_RENDER_ID = renderId;
-    let disposed = false;
     const savedCameraState =
       cameraStateRef.current?.cameraResetKey === cameraResetKey ? cameraStateRef.current : null;
 
@@ -439,7 +482,6 @@ function CatanScene({
     scene.add(world);
     const interactionTargets = [];
     const animatedHighlights = [];
-    const textureLoader = new THREE.TextureLoader();
     const requiredSceneTextures = 2;
     const sceneTextureSettleMs = 1500;
     let loadedSceneTextures = 0;
@@ -453,15 +495,9 @@ function CatanScene({
       }
     }
 
-    const playerTableMaterial = new THREE.MeshStandardMaterial({ color: '#b88560', roughness: 0.82 });
-    textureLoader.load(
+    const woodTexture = getSharedTexture(
       woodTextureUrl,
       (woodTexture) => {
-        if (disposed) {
-          woodTexture.dispose();
-          return;
-        }
-
         woodTexture.colorSpace = THREE.SRGBColorSpace;
         woodTexture.wrapS = THREE.RepeatWrapping;
         woodTexture.wrapT = THREE.RepeatWrapping;
@@ -469,34 +505,38 @@ function CatanScene({
         woodTexture.rotation = Math.PI / 2;
         woodTexture.repeat.set(1.65, 1.5);
         woodTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        playerTableMaterial.map = woodTexture;
-        playerTableMaterial.needsUpdate = true;
+        woodTexture.needsUpdate = true;
+      },
+      () => {
         markSceneTextureReady();
       },
-      undefined,
-      markSceneTextureReady,
     );
 
-    const boardTableMaterial = new THREE.MeshStandardMaterial({ color: '#1f6f78', roughness: 0.8 });
-    textureLoader.load(
+    const playerTableMaterial = new THREE.MeshStandardMaterial({
+      color: '#b88560',
+      roughness: 0.82,
+      map: woodTexture,
+    });
+
+    const plasticTexture = getSharedTexture(
       plasticTextureUrl,
       (plasticTexture) => {
-        if (disposed) {
-          plasticTexture.dispose();
-          return;
-        }
-
         plasticTexture.colorSpace = THREE.SRGBColorSpace;
         plasticTexture.wrapS = THREE.RepeatWrapping;
         plasticTexture.wrapT = THREE.RepeatWrapping;
         plasticTexture.repeat.set(1.2, 1.2);
-        boardTableMaterial.map = plasticTexture;
-        boardTableMaterial.needsUpdate = true;
+        plasticTexture.needsUpdate = true;
+      },
+      () => {
         markSceneTextureReady();
       },
-      undefined,
-      markSceneTextureReady,
     );
+
+    const boardTableMaterial = new THREE.MeshStandardMaterial({
+      color: '#1f6f78',
+      roughness: 0.8,
+      map: plasticTexture,
+    });
 
     const playerTable = new THREE.Mesh(
       new THREE.BoxGeometry(57, 0.12, 51),
@@ -602,6 +642,10 @@ function CatanScene({
       const pulse = 1 + Math.sin(elapsed * 4) * 0.08;
       animatedHighlights.forEach((highlight) => {
         highlight.scale.setScalar(pulse);
+        if (Number.isFinite(highlight.userData.baseY)) {
+          const riseAmount = highlight.userData.riseAmount ?? 0;
+          highlight.position.y = highlight.userData.baseY + ((pulse - 1) / 0.08) * riseAmount;
+        }
 
         if (highlight.material) {
           highlight.material.opacity = 0.62 + Math.sin(elapsed * 4) * 0.16;
@@ -650,7 +694,6 @@ function CatanScene({
         position: camera.position.clone(),
         target: controls.target.clone(),
       };
-      disposed = true;
       window.cancelAnimationFrame(animationId);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       resizeObserver.disconnect();

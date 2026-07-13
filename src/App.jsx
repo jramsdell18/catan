@@ -129,6 +129,12 @@ function App() {
     .filter((tile) => tile.number && tile.id !== game.board.robberTileId)
     .filter((tile) => tile.intersections.some((id) => game.board.intersections[id].building))
     .map((tile) => ({ tileId: tile.id, total: tile.number, resource: TERRAIN_RESOURCE[tile.terrain] })) : [], [game]);
+  const productionTileIds = useMemo(
+    () => game?.lastProduction?.tiles
+      .filter((tile) => tile.distributed && tile.demand > 0)
+      .map((tile) => tile.tileId) ?? [],
+    [game?.lastProduction],
+  );
 
   const playerMessage = useMemo(() => {
     if (lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
@@ -738,7 +744,7 @@ function App() {
           interactionMode={interactionMode}
           onSelectTarget={handleSelectTarget}
           diceRoll={diceRoll}
-          productionTileIds={game?.lastProduction?.tiles.filter((tile) => tile.distributed && tile.demand > 0).map((tile) => tile.tileId) ?? []}
+          productionTileIds={productionTileIds}
           pendingRoadEdgeIds={selectedRoadBuildingEdges}
         />
         <LiveKitTableCall
