@@ -9,6 +9,11 @@ async function state(page) {
   return page.evaluate(() => window.__CATAN_TEST_API.getState());
 }
 
+async function enableLocalTestMode(page) {
+  await page.getByTestId('enable-local-test-mode').click();
+  await expect.poll(async () => (await state(page)).localTestMode).toBe(true);
+}
+
 async function completeSetup(page) {
   for (let step = 0; step < 6; step += 1) {
     await expect.poll(async () => (await state(page)).phase).toBe('setup');
@@ -32,6 +37,7 @@ for (const viewport of viewports) {
     await page.setViewportSize(viewport.size);
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__CATAN_TEST_API?.getState));
+    await enableLocalTestMode(page);
 
     await page.getByTestId('rules-help').locator('summary').focus();
     await page.keyboard.press('Enter');

@@ -11,6 +11,8 @@ function StartGameOverlay({
   localParticipant = null,
   isHost = false,
   canStartGame = false,
+  localTestMode = false,
+  onEnableLocalTestMode = null,
 }) {
   const connected = Boolean(localParticipant?.connected);
   const allSeatsReady = Boolean(lobbyState?.seats.length) && lobbyState.seats.every((seat) => seat.claimedBy && seat.connected);
@@ -18,6 +20,21 @@ function StartGameOverlay({
     <div className="start-overlay" aria-labelledby="start-title">
       <p className="eyebrow">Catan Multiplayer</p>
       <h1 id="start-title">Start Game</h1>
+      {onEnableLocalTestMode && !localTestMode && (
+        <button
+          type="button"
+          className="secondary-button"
+          data-testid="enable-local-test-mode"
+          onClick={onEnableLocalTestMode}
+        >
+          Use local test mode
+        </button>
+      )}
+      {localTestMode && (
+        <p className="local-test-banner" data-testid="local-test-mode">
+          Local test mode: all seats are controlled on this device. Production multiplayer is unchanged.
+        </p>
+      )}
       <form className="start-controls" onSubmit={onConfirm} data-testid="player-setup-form">
         <label htmlFor="player-count">Players</label>
         <select
@@ -38,7 +55,7 @@ function StartGameOverlay({
       </form>
       <p className="helper-text" data-testid="player-setup-helper">
         {confirmedPlayers
-          ? `Players ready: ${confirmedPlayers}. ${allSeatsReady ? 'All seats connected.' : 'Waiting for seats to be claimed.'}`
+          ? `Players ready: ${confirmedPlayers}. ${localTestMode ? 'All seats use this device.' : allSeatsReady ? 'All seats connected.' : 'Waiting for seats to be claimed.'}`
           : `Current selection: ${selectedPlayers} players`}
       </p>
       {lobbyState && (
@@ -68,7 +85,7 @@ function StartGameOverlay({
           )}
         </div>
       )}
-      {!connected && <p className="helper-text">Join the table call to claim a color seat for multiplayer.</p>}
+      {!connected && !localTestMode && <p className="helper-text">Join the table call to claim a color seat for multiplayer.</p>}
     </div>
   );
 }

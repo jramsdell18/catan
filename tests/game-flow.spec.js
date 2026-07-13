@@ -18,15 +18,23 @@ async function getTestState(page) {
   return page.evaluate(() => window.__CATAN_TEST_API.getState());
 }
 
+async function enableLocalTestMode(page) {
+  const button = page.getByTestId('enable-local-test-mode');
+  if (await button.isVisible()) await button.click();
+  await expect(page.getByTestId('local-test-mode')).toBeVisible();
+  await expect.poll(async () => (await getTestState(page)).localTestMode).toBe(true);
+}
+
 function diceForTotal(total) {
   const first = Math.max(1, total - 6);
   return [first, total - first];
 }
 
 async function confirmPlayers(page, count = 3) {
+  await enableLocalTestMode(page);
   await page.getByTestId('player-count').selectOption(String(count));
   await page.getByTestId('set-players').click();
-  await expect(page.getByTestId('player-setup-helper')).toContainText(`last confirmed: ${count}`);
+  await expect(page.getByTestId('player-setup-helper')).toContainText(`Players ready: ${count}`);
   await expect(page.getByTestId('start-game')).toBeEnabled();
 }
 
@@ -85,7 +93,7 @@ test.describe('lobby and board controls', () => {
 
   test('Start Game stays disabled until players are confirmed', async ({ page }) => {
     await expect(page.getByTestId('start-game')).toBeDisabled();
-    await expect(page.getByTestId('status-message')).toContainText('Choose a player count');
+    await expect(page.getByTestId('status-message')).toContainText('Join the table call');
 
     await confirmPlayers(page, 4);
     await expect(page.getByTestId('status-message')).toContainText('4 players selected');

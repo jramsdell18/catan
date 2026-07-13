@@ -181,6 +181,11 @@ export function canParticipantAct({ lobbyState, participantId, game }) {
   return getParticipantPlayerId(lobbyState, participantId) === game.currentPlayerId;
 }
 
+export function canParticipantRequestAction({ lobbyState, participantId, game, action }) {
+  if (!action || !canParticipantAct({ lobbyState, participantId, game })) return false;
+  return getParticipantPlayerId(lobbyState, participantId) === action.playerId;
+}
+
 export function canHostStart(lobbyState, participantId) {
   return (
     lobbyState?.room.status === ROOM_STATUS.LOBBY &&

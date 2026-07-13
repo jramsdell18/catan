@@ -26,6 +26,7 @@ import { usePlayerView } from './game/usePlayerView.js';
 import {
   canHostStart,
   canParticipantAct,
+  canParticipantRequestAction,
   claimSeat,
   createLobbyState,
   getParticipantPlayerId,
@@ -76,6 +77,7 @@ function App() {
   const [outboundMessage, setOutboundMessage] = useState(null);
   const [lastHostHeartbeatAt, setLastHostHeartbeatAt] = useState(Date.now());
   const [selectedRoadBuildingEdges, setSelectedRoadBuildingEdges] = useState([]);
+  const [localTestMode, setLocalTestMode] = useState(false);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -83,23 +85,30 @@ function App() {
   const ports = useMemo(() => createBoardPorts(topology, board.seed), [board.seed, topology]);
   const placements = useMemo(() => placementsFromGame(game), [game]);
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
+  const isLocalTestMode = import.meta.env.DEV && localTestMode;
   const isLiveRoomConnected = Boolean(localParticipant?.connected);
   const isHost = Boolean(
-    isLiveRoomConnected &&
-      lobbyState?.room.hostParticipantId === localParticipant?.participantId,
+    isLocalTestMode || (
+      isLiveRoomConnected &&
+        lobbyState?.room.hostParticipantId === localParticipant?.participantId
+    ),
   );
-  const viewerId = getParticipantPlayerId(lobbyState, localParticipant?.participantId);
-  const viewerRole = getParticipantRole(lobbyState, localParticipant?.participantId);
-  const isViewerTurn = canParticipantAct({
-    lobbyState,
-    participantId: localParticipant?.participantId,
-    game,
-  });
-  const canStartGame = canHostStart(lobbyState, localParticipant?.participantId);
+  const viewerId = isLocalTestMode
+    ? game?.currentPlayerId ?? null
+    : getParticipantPlayerId(lobbyState, localParticipant?.participantId);
+  const viewerRole = isLocalTestMode
+    ? 'host'
+    : getParticipantRole(lobbyState, localParticipant?.participantId);
+  const isViewerTurn = isLocalTestMode
+    ? Boolean(game)
+    : canParticipantAct({ lobbyState, participantId: localParticipant?.participantId, game });
+  const canStartGame = isLocalTestMode
+    ? Boolean(confirmedPlayers)
+    : canHostStart(lobbyState, localParticipant?.participantId);
   const playerView = usePlayerView(game, viewerId);
   // Local single-browser play keeps shared-device discard/trade UX.
   // Live multiplayer rooms always use seat-scoped privacy.
-  const sharedDeviceMode = !isLiveRoomConnected;
+  const sharedDeviceMode = isLocalTestMode || !isLiveRoomConnected;
   const resourceHands = useMemo(
     () => resourceHandsFromGame(game, activePlayers, playerView),
     [activePlayers, game, playerView],
@@ -137,13 +146,17 @@ function App() {
   );
 
   const playerMessage = useMemo(() => {
-    if (lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
+    if (!isLocalTestMode && lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
       return 'Host disconnected. The room is read-only until a new game is hosted.';
     }
-    if (!isLiveRoomConnected) return 'Join the table call to host or claim a player seat.';
-    if (!confirmedPlayers) return 'Host chooses a player count to start the room setup.';
+    if (!isLocalTestMode && !isLiveRoomConnected) return 'Join the table call to host or claim a player seat.';
+    if (!confirmedPlayers) return isLocalTestMode
+      ? 'Choose a player count for the local test game.'
+      : 'Host chooses a player count to start the room setup.';
     if (!game && !canStartGame) return 'Waiting for all selected seats to be claimed.';
-    if (!game) return `${confirmedPlayers} players selected. Host can start the game.`;
+    if (!game) return isLocalTestMode
+      ? `${confirmedPlayers} players selected. Start the local test game when ready.`
+      : `${confirmedPlayers} players selected. Host can start the game.`;
     if (!isViewerTurn) {
       return `Waiting for ${currentPlayer?.label ?? 'the current player'}.`;
     }
@@ -156,7 +169,7 @@ function App() {
     if (game.phase === 'gameOver') return `${currentPlayer?.label ?? 'A player'} won the game.`;
     if (game.phase === 'action') return `${currentPlayer?.label ?? 'Current player'} may build, trade, or end the turn.`;
     return 'Game started.';
-  }, [canStartGame, confirmedPlayers, currentPlayer, game, isLiveRoomConnected, isViewerTurn, lobbyState?.room.status]);
+  }, [canStartGame, confirmedPlayers, currentPlayer, game, isLiveRoomConnected, isLocalTestMode, isViewerTurn, lobbyState?.room.status]);
 
   const legalTargets = useMemo(
     () => {
@@ -239,6 +252,11 @@ function App() {
       return;
     }
 
+    if (isLocalTestMode) {
+      dispatchLocal(action);
+      return;
+    }
+
     if (isHost) {
       dispatchLocal(action, { broadcast: true });
       return;
@@ -252,7 +270,7 @@ function App() {
 
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.ACTION_REQUEST, { action });
     setActionFeedback({ status: 'pending', message: `Requested: ${describeAction(action.type)}.` });
-  }, [dispatchLocal, isHost, isLiveRoomConnected, isViewerTurn, sendRoomMessage]);
+  }, [dispatchLocal, isHost, isLiveRoomConnected, isLocalTestMode, isViewerTurn, sendRoomMessage]);
 
   const cancelInteraction = useCallback(() => {
     setRequestedMode(null);
@@ -297,6 +315,17 @@ function App() {
       });
     }
     resetTransientState();
+  }
+
+  function handleEnableLocalTestMode() {
+    if (!import.meta.env.DEV) return;
+    setLocalTestMode(true);
+    setLocalParticipant(null);
+    setLobbyState(null);
+    setSelectedPlayers(3);
+    setConfirmedPlayers(3);
+    setGame(null);
+    resetTransientState('Local test mode enabled.');
   }
 
   function handleStartGame() {
@@ -347,8 +376,7 @@ function App() {
 
   function handleChosenDice(dice) {
     if (game?.phase !== 'roll') return;
-    setDiceRoll((current) => ({ values: dice, rollId: (current?.rollId ?? 0) + 1 }));
-    dispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
+    requestOrDispatch({ type: 'rollDice', playerId: game.currentPlayerId, dice });
   }
 
   function handleLoadTestBoard(seed) {
@@ -556,7 +584,12 @@ function App() {
     if (message.type === MULTIPLAYER_MESSAGE_TYPES.ACTION_REQUEST) {
       const action = payload.action;
       const playerId = getParticipantPlayerId(lobbyState, sender.participantId);
-      if (!action || !playerId || action.playerId !== playerId || game?.currentPlayerId !== playerId) {
+      if (!canParticipantRequestAction({
+        lobbyState,
+        participantId: sender.participantId,
+        game,
+        action,
+      })) {
         sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.ACTION_REJECTED, {
           to: sender.participantId,
           error: 'You cannot perform that action right now.',
@@ -645,6 +678,7 @@ function App() {
         viewerId,
         viewerRole,
         isViewerTurn,
+        localTestMode: isLocalTestMode,
         lobbyState,
         resources: game
           ? Object.fromEntries(game.players.map((player) => [player.id, { ...player.resources }]))
@@ -761,14 +795,14 @@ function App() {
           productionTileIds={productionTileIds}
           pendingRoadEdgeIds={selectedRoadBuildingEdges}
         />
-        <LiveKitTableCall
+        {!isLocalTestMode && <LiveKitTableCall
           players={activePlayers}
           claimedPlayerIds={lobbyState?.seats.filter((seat) => seat.claimedBy).map((seat) => seat.playerId) ?? []}
           outboundMessage={outboundMessage}
           onDataMessage={handleDataMessage}
           onLocalParticipantChange={handleLocalParticipantChange}
           onParticipantPresenceChange={handleParticipantPresenceChange}
-        />
+        />}
         {!game && (
           <StartGameOverlay
             selectedPlayers={selectedPlayers}
@@ -782,6 +816,8 @@ function App() {
             viewerRole={viewerRole}
             isHost={isHost}
             canStartGame={canStartGame}
+            localTestMode={isLocalTestMode}
+            onEnableLocalTestMode={import.meta.env.DEV ? handleEnableLocalTestMode : null}
           />
         )}
         <GameOverOverlay playerView={playerView} onRestart={handleRestartGame} onNewGame={handleNewGame} />
