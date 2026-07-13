@@ -801,7 +801,6 @@ function App() {
         onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
         onTradeAction={requestOrDispatch}
         viewerRole={viewerRole}
-        viewerId={viewerId}
         isViewerTurn={isViewerTurn}
         isHost={isHost}
         canStartGame={canStartGame}
