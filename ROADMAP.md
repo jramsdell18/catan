@@ -1,6 +1,6 @@
 # Production v1.0.0 plan
 
-This is the forward-looking production roadmap. The previous implementation roadmap has been retired: its completed work is summarized as the MVP baseline below, and its unfinished production-relevant work has been migrated into this plan.
+This is the forward-looking production roadmap (previously `TODO.md`). The previous implementation roadmap has been retired: its completed work is summarized as the MVP baseline below, and its unfinished production-relevant work has been migrated into this plan.
 
 ## Current status: MVP complete
 
@@ -40,20 +40,25 @@ Release success means:
 ```mermaid
 flowchart LR
     MVP["MVP baseline"] --> BASE["0: Stabilize MVP baseline"]
-    BASE --> ARCH["A: Architecture contract"]
-    ARCH --> SPIKE["B: Runtime spike"]
+    MVP --> ARCH["A: Architecture contract"]
+    BASE --> SPIKE["B: Runtime spike"]
+    ARCH --> SPIKE
     ARCH --> RULES["C1: Shared rules package"]
+    BASE --> RULES
     ARCH --> PROTOCOL["C2: Protocol and versions"]
+    BASE --> PROTOCOL
     ARCH --> PRODUCT["C4: Product and legal"]
     SPIKE --> PLATFORM["C3: Service and delivery foundation"]
     RULES --> SERVER["D1: Authoritative room server"]
+    RULES --> CLIENT["D2: Client transport boundary"]
     PROTOCOL --> SERVER
-    PROTOCOL --> CLIENT["D2: Client transport boundary"]
+    PROTOCOL --> CLIENT
     PLATFORM --> SERVER
     SERVER --> ONLINE["E: Integrated online game"]
     CLIENT --> ONLINE
     ONLINE --> RESILIENCE["F1: Persistence and reconnect"]
     ONLINE --> SECURITY["F2: Security and privacy"]
+    PROTOCOL --> SECURITY
     ONLINE --> QUALITY["F3: UX and performance"]
     PLATFORM --> OPS["F4: Operations"]
     RESILIENCE --> RELEASE["G: Release validation"]
@@ -68,15 +73,15 @@ flowchart LR
 
 | ID | Workstream | Priority | Depends on | Can run in parallel with |
 |----|------------|----------|------------|--------------------------|
-| 0 | Stabilize MVP baseline | P0 | Current `origin/main` | Nothing; restore a green baseline first |
-| A | Architecture contract | P0 | 0 | Nothing; lock boundaries first |
-| B | Runtime spike and selection | P0 | A | Early C1, C2, C4 exploration |
-| C1 | Shared rules package | P0 | A | B, C2, C4 |
-| C2 | Protocol, identity, and versions | P0 | A | B, C1, C4 |
+| 0 | Stabilize MVP baseline | P0 | Current `origin/main` | A (decision and documentation work only) |
+| A | Architecture contract | P0 | Current `origin/main` | 0 |
+| B | Runtime spike and selection | P0 | 0, A | Early C1, C2, C4 exploration |
+| C1 | Shared rules package | P0 | 0, A | B, C2, C4 |
+| C2 | Protocol, identity, and versions | P0 | 0, A | B, C1, C4 |
 | C3 | Service/deployment foundation | P0 | B | C1, C2, C4 |
-| C4 | Product, policy, and legal readiness | P0/P1 | A | All engineering workstreams |
+| C4 | Product, policy, and legal readiness | P0/P1 | A | All engineering workstreams; start C4-01 immediately (long lead, gates G-08) |
 | D1 | Authoritative room server | P0 | B, C1, C2, C3 | D2 after protocol contract stabilizes |
-| D2 | Client transport and media separation | P0 | C2 | D1 |
+| D2 | Client transport and media separation | P0 | C1, C2 | D1, with explicit ownership of shared client modules |
 | E | Integrated online game | P0 | D1, D2 | Focused performance and policy work |
 | F1–F4 | Production hardening | P0/P1 | E or C3 as shown | Each other, with separate file ownership |
 | G | Release validation and launch | P0 | All P0 F work + C4 | P1 polish that cannot destabilize RC |
@@ -85,20 +90,20 @@ flowchart LR
 
 **Depends on:** current `origin/main`
 
-**Parallel with:** none
+**Parallel with:** A (architecture decisions and documentation do not require the green baseline; implementation workstreams B and C1–C3 require this workstream's exit)
 
 **Exit:** the exact MVP baseline is green and its intentional compact-control behavior is covered by current tests.
 
 - [ ] **[P0][MVP-01]** Reconcile compact build controls with the player-facing cost contract: keep road/settlement/city costs discoverable and accessible even if the visible buttons use `R`, `S`, and `C` shorthand.
 - [ ] **[P0][MVP-02]** Update the stale building-flow Playwright assertion to test the intended compact UI without weakening resource-cost and disabled-state coverage.
-- [ ] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before architecture work begins.
+- [ ] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before implementation workstreams (B, C1–C3) begin.
 - [ ] **[P1][MVP-04]** Record the MVP's known limitations and the production migration boundary in the maintained architecture documentation.
 
 ## A. Architecture contract
 
-**Depends on:** 0
+**Depends on:** current `origin/main`
 
-**Parallel with:** none
+**Parallel with:** 0 (this is decision and documentation work; it must complete before implementation spreads across client and server)
 
 **Exit:** stable boundaries are documented before implementation spreads across client and server.
 
@@ -122,7 +127,7 @@ Suggested prerelease progression:
 
 ## B. Runtime spike and platform selection
 
-**Depends on:** A
+**Depends on:** 0, A
 
 **Parallel with:** initial C1/C2 design and C4
 
@@ -135,11 +140,11 @@ Suggested prerelease progression:
 - [ ] **[P0][B-05]** Prove the Netlify-to-game-host dual-origin path, including WebSocket connection, allowed origins, and credential transport.
 - [ ] **[P0][B-06]** Run the spike locally and in CI; document Wrangler/runtime friction and test isolation.
 - [ ] **[P0][B-07]** Compare Durable Objects with the thin Node fallback on implementation complexity, local testing, persistence, deployment, observability, and expected cost.
-- [ ] **[P0][B-08]** Select the runtime, record the decision and tradeoffs, and revise downstream estimates before building D1.
+- [ ] **[P0][B-08]** Select the runtime, record the decision and tradeoffs, and record rough effort sizing for D1 and downstream workstreams before building D1.
 
 ## C1. Shared rules package
 
-**Depends on:** A
+**Depends on:** 0, A
 
 **Parallel with:** B, C2, C4
 
@@ -154,7 +159,7 @@ Suggested prerelease progression:
 
 ## C2. Protocol, identity, and versions
 
-**Depends on:** A
+**Depends on:** 0, A
 
 **Parallel with:** B, C1, C4
 
@@ -188,11 +193,11 @@ Suggested prerelease progression:
 
 **Depends on:** A
 
-**Parallel with:** all engineering workstreams
+**Parallel with:** all engineering workstreams. Start C4-01 immediately after A: it is the longest-lead release risk, it drives C4-06 branding/domain/copy decisions, and it gates any public distribution including the invited alpha (G-08).
 
 **Exit:** public distribution, naming, data use, and user support have explicit owners and decisions.
 
-- [ ] **[P0][C4-01]** Complete an intellectual-property review of the product name, rules presentation, visual assets, and public distribution; license or rebrand before launch where required.
+- [ ] **[P0][C4-01]** Complete an intellectual-property review of the product name, rules presentation, visual assets, and public distribution. Plan for the likely outcome being a rebrand — "Catan" is an actively enforced registered trademark — and license or rebrand before any public distribution. This item must be complete before the invited alpha (G-08), not merely before launch.
 - [ ] **[P0][C4-02]** Publish a privacy policy covering room identifiers, seat credentials, logs, local storage, optional camera/microphone media, retention, and deletion.
 - [ ] **[P0][C4-03]** Define data-retention periods for abandoned rooms, active snapshots, logs, and support artifacts.
 - [ ] **[P0][C4-04]** Provide a support/contact and security-reporting path.
@@ -208,7 +213,7 @@ Suggested prerelease progression:
 **Exit:** automated clients can create a room and complete a full authoritative game without LiveKit.
 
 - [ ] **[P0][D1-01]** Create rooms with collision-resistant human-friendly codes and explicit expiration.
-- [ ] **[P0][D1-02]** Implement join, seat/color claim, ready, start, presence, leave, and host/lobby-role behavior.
+- [ ] **[P0][D1-02]** Implement join, seat/color claim, ready, start, presence, leave, and host/lobby-role behavior. Define non-seated joiners explicitly: v1 rejects them with a clear room-full/seats-taken response — spectator mode is deferred to P2, and the MVP lobby's spectator support does not carry into the authoritative server.
 - [ ] **[P0][D1-03]** Store the only full authoritative lobby and game state on the server.
 - [ ] **[P0][D1-04]** Generate the board, dice, development deck, and theft outcomes exclusively on the server.
 - [ ] **[P0][D1-05]** Serialize command handling per room and apply every game mutation through server-side `applyAction`.
@@ -220,9 +225,9 @@ Suggested prerelease progression:
 
 ## D2. Client transport and media separation
 
-**Depends on:** C2
+**Depends on:** C1, C2 — D2-02 and D2-04 rework the same client modules whose rules imports move to `packages/rules` in C1; sequencing D2 after C1 avoids conflicting edits to shared files.
 
-**Parallel with:** D1
+**Parallel with:** D1, with explicit ownership of shared client modules
 
 **Exit:** the UI does not know whether commands are handled locally or by the production server, and media is optional.
 
@@ -348,7 +353,7 @@ Suggested prerelease progression:
 
 ### Release process
 
-- [ ] **[P0][G-08]** Run an invited alpha, record defects/operational gaps, and meet the alpha exit criteria.
+- [ ] **[P0][G-08]** Run an invited alpha, record defects/operational gaps, and meet the alpha exit criteria. Requires C4-01 complete: do not distribute under unlicensed branding, even to an invited audience.
 - [ ] **[P0][G-09]** Run a hosted beta/soak period with production observability and meet the beta exit criteria.
 - [ ] **[P0][G-10]** Freeze `1.0.0-rc.1`; permit only reviewed release-blocker fixes and rerun every gate after changes.
 - [ ] **[P0][G-11]** Verify production environment variables, domains, TLS, policies, support contacts, dashboards, alerts, provider budgets, and rollback.
@@ -376,7 +381,7 @@ These may be researched or designed, but must not delay the critical path unless
 
 - Public matchmaking and room discovery.
 - User accounts, profiles, friends, invitations, and cross-device identity.
-- Spectator mode.
+- Spectator mode (including carrying the MVP lobby's spectator support into the authoritative server; v1 rejects non-seated joiners — see D1-02).
 - Bots or single-player AI.
 - Text chat, moderation systems, and social features beyond optional table media.
 - Leaderboards, ratings, achievements, seasons, and progression.

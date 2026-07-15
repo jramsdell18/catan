@@ -72,6 +72,6 @@ Use `publicVictoryPoints` for scoreboard UI and `privateVictoryPoints` only for 
 
 Local single-browser play may still keep full state in memory for `applyAction` and legal-target checks; it should still **display** private surfaces through `getPlayerView` so the same boundary is exercised before online work.
 
-Local save/resume and pass-and-play handoff are **out of scope** for this boundary (see Future milestone in `TODO.md`).
+Local save/resume and pass-and-play handoff are **out of scope** for this boundary (explicitly deferred beyond v1.0.0; see `ROADMAP.md`).
 
 Two-player Catan and 5–6 player Catan are not base-game modes. Add their variant/expansion turn rules separately before exposing them as standard games.
