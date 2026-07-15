@@ -1,329 +1,400 @@
-# Catan development roadmap
+# Production v1.0.0 plan
+
+This is the forward-looking production roadmap. The previous implementation roadmap has been retired: its completed work is summarized as the MVP baseline below, and its unfinished production-relevant work has been migrated into this plan.
+
+## Current status: MVP complete
+
+The current application is the **MVP**:
+
+- Three or four players can join a LiveKit table, claim seats, and play a complete rules-validated game through victory.
+- The rules engine supports setup, production, robber/discard, building, trading, development cards, scoring, awards, and game completion.
+- The React and Three.js client provides desktop/mobile gameplay, compact controls, a local development simulator, deterministic test controls, and optional table voice/video.
+- Unit, rules, build, browser-flow, responsive, and render-lifecycle checks run in CI.
+
+The MVP is not yet the production architecture. A host browser currently owns the full game and broadcasts full snapshots over LiveKit data. That means host departure stops the game, LiveKit availability is coupled to gameplay, active games are not durable, and private engine state is not protected at the network boundary.
+
+## v1.0.0 outcome
+
+`v1.0.0` is the first supported public production release. It uses a **server-authoritative game service** while keeping LiveKit as optional voice/video only.
+
+Release success means:
+
+- Three or four guests can create or join a table with a human-friendly code and finish a complete game on separate devices.
+- The server owns rooms, seats, rules state, board/deck/dice randomness, command order, and persistence.
+- Each client receives only its sanitized `getPlayerView`; another player's hidden resources, development cards, private points, and deck order never cross the wire.
+- Refreshes and short disconnects restore the correct seat and state; host departure does not stop play.
+- Active games survive service eviction, restart, and normal deployment.
+- Voice/video is optional and a media failure does not prevent board play.
+- The service is secure, observable, supportable, cost-controlled, tested, and documented.
+
+## Priority and dependency notation
+
+- **P0 — release blocker:** required for `v1.0.0`.
+- **P1 — production should-have:** include unless a documented release waiver accepts the risk.
+- **P2 — nice-to-have:** explicitly not required for `v1.0.0`.
+- Each workstream lists `Depends on` and `Parallel with` so independent work can proceed concurrently.
+- Do not begin a dependent workstream merely because its predecessor has started; its stated exit criteria must pass.
+
+## Release sequence
+
+```mermaid
+flowchart LR
+    MVP["MVP baseline"] --> BASE["0: Stabilize MVP baseline"]
+    BASE --> ARCH["A: Architecture contract"]
+    ARCH --> SPIKE["B: Runtime spike"]
+    ARCH --> RULES["C1: Shared rules package"]
+    ARCH --> PROTOCOL["C2: Protocol and versions"]
+    ARCH --> PRODUCT["C4: Product and legal"]
+    SPIKE --> PLATFORM["C3: Service and delivery foundation"]
+    RULES --> SERVER["D1: Authoritative room server"]
+    PROTOCOL --> SERVER
+    PROTOCOL --> CLIENT["D2: Client transport boundary"]
+    PLATFORM --> SERVER
+    SERVER --> ONLINE["E: Integrated online game"]
+    CLIENT --> ONLINE
+    ONLINE --> RESILIENCE["F1: Persistence and reconnect"]
+    ONLINE --> SECURITY["F2: Security and privacy"]
+    ONLINE --> QUALITY["F3: UX and performance"]
+    PLATFORM --> OPS["F4: Operations"]
+    RESILIENCE --> RELEASE["G: Release validation"]
+    SECURITY --> RELEASE
+    QUALITY --> RELEASE
+    OPS --> RELEASE
+    PRODUCT --> RELEASE
+    RELEASE --> V1["v1.0.0"]
+```
 
-This roadmap is ordered by dependency and delivery value. Finish each milestone before moving to the next unless a task is explicitly optional.
+### Workstream summary
 
-**Product direction:** the primary target is a **live multiplayer** game (play until victory or abandon). Local play is the development client. Optional local conveniences (pass-and-play handoff, save/resume) are deferred to a low-priority future milestone—not required for multiplayer readiness.
+| ID | Workstream | Priority | Depends on | Can run in parallel with |
+|----|------------|----------|------------|--------------------------|
+| 0 | Stabilize MVP baseline | P0 | Current `origin/main` | Nothing; restore a green baseline first |
+| A | Architecture contract | P0 | 0 | Nothing; lock boundaries first |
+| B | Runtime spike and selection | P0 | A | Early C1, C2, C4 exploration |
+| C1 | Shared rules package | P0 | A | B, C2, C4 |
+| C2 | Protocol, identity, and versions | P0 | A | B, C1, C4 |
+| C3 | Service/deployment foundation | P0 | B | C1, C2, C4 |
+| C4 | Product, policy, and legal readiness | P0/P1 | A | All engineering workstreams |
+| D1 | Authoritative room server | P0 | B, C1, C2, C3 | D2 after protocol contract stabilizes |
+| D2 | Client transport and media separation | P0 | C2 | D1 |
+| E | Integrated online game | P0 | D1, D2 | Focused performance and policy work |
+| F1–F4 | Production hardening | P0/P1 | E or C3 as shown | Each other, with separate file ownership |
+| G | Release validation and launch | P0 | All P0 F work + C4 | P1 polish that cannot destabilize RC |
 
-## Milestone 0: Current foundation
+## 0. Stabilize the MVP baseline
 
-- [x] Generate and render the 19-hex 3D board.
-- [x] Generate shared intersection and edge topology.
-- [x] Support three- and four-player games.
-- [x] Integrate setup placement with the rules engine.
-- [x] Enforce setup settlement distance and road adjacency.
-- [x] Implement the two-round snake setup order.
-- [x] Give every player one wood, brick, ore, hay, and sheep after their second settlement.
-- [x] Display current phase, player resources, piece inventory, dice, and active player.
-- [x] Support basic dice rolls and end-turn transitions.
-- [x] Add rules unit tests and desktop/mobile render tests.
+**Depends on:** current `origin/main`
 
-## Milestone 1: Complete and validate the board model
+**Parallel with:** none
 
-These tasks establish all board data needed by later gameplay UI.
+**Exit:** the exact MVP baseline is green and its intentional compact-control behavior is covered by current tests.
 
-- [x] Render number tokens on every productive hex.
-- [x] Visually emphasize number tokens 6 and 8.
-- [x] Generate number tokens with the intended distribution.
-- [x] Prevent 6 and 8 tokens from being adjacent.
-- [x] Add port locations to the generated topology.
-- [x] Generate generic 3:1 and resource-specific 2:1 ports.
-- [x] Render ports and their trade ratios.
-- [x] Render the robber from `game.board.robberTileId` instead of the original desert flag.
-- [x] Add board-generation tests for terrain counts, number counts, 6/8 adjacency, desert, ports, and topology validity.
+- [ ] **[P0][MVP-01]** Reconcile compact build controls with the player-facing cost contract: keep road/settlement/city costs discoverable and accessible even if the visible buttons use `R`, `S`, and `C` shorthand.
+- [ ] **[P0][MVP-02]** Update the stale building-flow Playwright assertion to test the intended compact UI without weakening resource-cost and disabled-state coverage.
+- [ ] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before architecture work begins.
+- [ ] **[P1][MVP-04]** Record the MVP's known limitations and the production migration boundary in the maintained architecture documentation.
 
-### Done when
+## A. Architecture contract
 
-A randomized board contains every piece of data required by the rules engine, passes board validation, and communicates numbers, ports, and robber position visually.
+**Depends on:** 0
 
-## Milestone 2: Generalize UI-to-engine actions
+**Parallel with:** none
 
-### High-level goal
+**Exit:** stable boundaries are documented before implementation spreads across client and server.
 
-Create one reliable interaction system between the player, the 3D board, and the rules engine. When a player chooses an action, the UI enters a clear mode, shows only legal targets, sends the resulting command to the engine, and renders the authoritative state returned by the engine.
+- [ ] **[P0][A-01]** Adopt server-authoritative gameplay as the product architecture; the browser sends commands and renders server responses.
+- [ ] **[P0][A-02]** Keep Cloudflare Durable Objects as the preferred runtime candidate, with thin Node WebSocket service and Colyseus as fallbacks pending the spike.
+- [ ] **[P0][A-03]** Define the production topology: frontend host, game API/WebSocket origin, optional LiveKit media, DNS, TLS, and environment boundaries.
+- [ ] **[P0][A-04]** Define ownership of full game state, lobby state, seat credentials, RNG, player views, media identity, and persistence.
+- [ ] **[P0][A-05]** Define application SemVer, integer `protocolVersion`, integer `stateSchemaVersion`, and Git/build revision reporting.
+- [ ] **[P0][A-06]** Record the decision and diagrams in maintained architecture documentation; distinguish current MVP from target V1.
+- [ ] **[P0][A-07]** Define measurable release budgets: supported browsers/devices, command latency, reconnect window, concurrent rooms/players, availability target, and monthly cost alert threshold.
 
-This milestone is primarily architecture and user-experience groundwork rather than a large set of new Catan rules. It replaces feature-specific click handling with reusable patterns that later milestones can use for building roads, placing settlements, upgrading cities, moving the robber, selecting victims, and resolving development cards.
+Suggested prerelease progression:
 
-### What this unlocks for players
+| Version | Meaning |
+|---------|---------|
+| Current `0.1.0` | MVP baseline |
+| `1.0.0-alpha.1` | First end-to-end server-authoritative game |
+| `1.0.0-beta.1` | Feature-complete persistence, reconnect, privacy, and optional media |
+| `1.0.0-rc.1` | Production-configured release candidate |
+| `1.0.0` | Supported public release |
 
-- Every board action follows the same understandable flow: choose an action, see legal targets, select a target, and receive clear confirmation or an error.
-- Players can cancel an unfinished board action without accidentally changing game state.
-- The pieces, resources, robber, and prompts shown on screen consistently match the rules engine.
-- Players receive visible feedback about what happened instead of having to infer it from the board.
-- The action history makes turns easier to follow and provides a foundation for debugging, replays, and multiplayer synchronization.
+## B. Runtime spike and platform selection
 
-### Impact on completing a full game
+**Depends on:** A
 
-Milestone 2 does not by itself make every Catan action playable. It creates the shared interaction pipeline required by Milestones 3–7. Without it, building, robber movement, trading, development cards, and scoring would each need separate UI logic and could drift away from the authoritative rules.
+**Parallel with:** initial C1/C2 design and C4
 
-After this milestone, new gameplay features become smaller integrations: define the available command, derive its legal targets, and render the engine result. Completing it lowers the risk of illegal client-side actions and makes it practical to add the remaining full-game workflows consistently.
+**Exit:** one runtime is selected using evidence, not preference.
 
-### Implementation tasks
+- [ ] **[P0][B-01]** Run `createGame`, `applyAction`, and `getPlayerView` inside a Cloudflare Durable Object using the prospective shared rules boundary.
+- [ ] **[P0][B-02]** Connect two clients to one room and deliver a different private view to each.
+- [ ] **[P0][B-03]** Accept a versioned command, reject stale and duplicate commands, and prove the action applies exactly once.
+- [ ] **[P0][B-04]** Persist and restore a room after object eviction/restart, including reconnecting a seat credential.
+- [ ] **[P0][B-05]** Prove the Netlify-to-game-host dual-origin path, including WebSocket connection, allowed origins, and credential transport.
+- [ ] **[P0][B-06]** Run the spike locally and in CI; document Wrangler/runtime friction and test isolation.
+- [ ] **[P0][B-07]** Compare Durable Objects with the thin Node fallback on implementation complexity, local testing, persistence, deployment, observability, and expected cost.
+- [ ] **[P0][B-08]** Select the runtime, record the decision and tradeoffs, and revise downstream estimates before building D1.
 
-- [x] Add a reusable action dispatcher with pending, success, and error feedback.
-- [x] Introduce UI interaction modes such as `placeRoad`, `placeSettlement`, `buildCity`, and `moveRobber`.
-- [x] Add a consistent cancel action for board-selection modes.
-- [x] Derive all roads, settlements, cities, robber state, resources, pieces, and phase prompts from engine state.
-- [x] Add reusable legal-target highlights for intersections, edges, and hexes.
-- [x] Add an action/event history panel based on the engine log.
+## C1. Shared rules package
 
-### Done when
+**Depends on:** A
 
-The UI never changes authoritative game values directly; every game change is an engine command and every rendered game object is derived from the returned state.
+**Parallel with:** B, C2, C4
 
-## Milestone 3: Normal building and city rendering
+**Exit:** browser, server, and tests consume one environment-neutral rules implementation.
 
-- [x] Add Build Road, Build Settlement, and Build City controls.
-- [x] Show the resource cost beside each build action.
-- [x] Disable build actions when the player cannot afford them or has no pieces left.
-- [x] Highlight legal road and settlement locations during the action phase.
-- [x] Highlight owned settlements eligible for a city upgrade.
-- [x] Render cities distinctly from settlements.
-- [x] Support multiple build actions before ending the turn.
-- [x] Display clear engine validation errors for illegal placement or payment.
-- [x] Add UI integration tests for roads, settlements, cities, costs, and piece inventory.
+- [ ] **[P0][C1-01]** Move the pure rules engine into an internal workspace package such as `packages/rules`; do not make the server import browser application source.
+- [ ] **[P0][C1-02]** Keep the package free of React, DOM, LiveKit, Three.js, storage, and host-specific APIs.
+- [ ] **[P0][C1-03]** Preserve injected deterministic randomness for board generation, dice, robber theft, and development-deck order.
+- [ ] **[P0][C1-04]** Define and test serialization/restore behavior for every authoritative state field.
+- [ ] **[P0][C1-05]** Keep `getPlayerView` as the single private-state sanitizer and test every hidden-information boundary.
+- [ ] **[P0][C1-06]** Move existing rules tests without reducing coverage and prove the browser build still uses the same package.
 
-### Done when
+## C2. Protocol, identity, and versions
 
-After rolling, a player can legally build every piece type, see the correct resource payment and inventory change, and continue acting until ending the turn.
+**Depends on:** A
 
-## Milestone 4: Complete dice production and robber workflows
+**Parallel with:** B, C1, C4
 
-- [x] Show a clear dice result and highlight producing hexes.
-- [x] Show which resources each player received.
-- [x] Explain production skipped because of bank shortages.
-- [x] When a 7 is rolled, calculate and display every required discard count.
-- [x] Add resource-selection forms for discarding exactly half the required hand.
-- [x] Prevent robber movement until all required discards are complete.
-- [x] Highlight legal robber destination hexes.
-- [x] Show eligible victims adjacent to the selected hex.
-- [x] Allow the active player to choose a victim or confirm that no victim is available.
-- [x] Move the rendered robber to its new hex.
-- [x] Display the stolen result without exposing hidden information to other players.
-- [x] Add UI integration tests for production, bank shortages, discards, robber movement, and theft.
+**Exit:** server and client can be implemented independently against validated contracts.
 
-### Done when
+- [ ] **[P0][C2-01]** Define validated schemas for create, join, seat, ready, start, command, acknowledgement, rejection, snapshot, public event, reconnect, leave, and server-error messages.
+- [ ] **[P0][C2-02]** Require `roomId`, `commandId`, `expectedVersion`, seat/session credential, and rules action on gameplay commands.
+- [ ] **[P0][C2-03]** Define monotonically increasing authoritative state versions and exact duplicate/stale-command behavior.
+- [ ] **[P0][C2-04]** Define an explicit seat-scoped wire view; never serialize the full engine object or unbounded action history.
+- [ ] **[P0][C2-05]** Define opaque, high-entropy, server-issued seat/reconnect credentials with rotation, expiration, and revocation rules.
+- [ ] **[P0][C2-06]** Add `protocolVersion` negotiation and a clear incompatible/stale-client response.
+- [ ] **[P0][C2-07]** Add `stateSchemaVersion` to persisted rooms and define migration/refusal behavior.
+- [ ] **[P0][C2-08]** Add contract tests shared by client and server.
 
-Every possible dice result, including 7, can be resolved entirely from the UI without restarting or manually changing state.
+## C3. Service and delivery foundation
 
-## Milestone 5: Maritime and domestic trading
+**Depends on:** B
 
-### Maritime trade
+**Parallel with:** C1, C2, C4
 
-- [x] Add give-resource and receive-resource selectors.
-- [x] Calculate and display the player's best available 4:1, 3:1, or 2:1 ratio.
-- [x] Show which ports the player controls.
-- [x] Disable trades the player or bank cannot fulfill.
-- [x] Dispatch maritime trades through the engine.
+**Exit:** the selected game service can be developed, previewed, deployed, and tested independently.
 
-### Domestic trade
+- [ ] **[P0][C3-01]** Create a separate game-service app/package with local, test, preview, staging, and production configuration.
+- [ ] **[P0][C3-02]** Add environment validation for game origin, frontend origin allowlist, secrets, LiveKit integration, retention, and observability.
+- [ ] **[P0][C3-03]** Add CI jobs for server unit tests, protocol contracts, integration tests, build/type checks, and platform-specific tests.
+- [ ] **[P0][C3-04]** Configure preview/staging deployment without sharing production rooms or credentials.
+- [ ] **[P0][C3-05]** Document local full-stack startup, environment setup, deployment, rollback, and secret rotation.
+- [ ] **[P1][C3-06]** Automate deployment promotion from tested release candidate to production.
 
-- [x] Add an offer builder for resources given and requested.
-- [x] Allow offers to target one player or remain open to opponents.
-- [x] Add accept, reject, cancel, and expiration states.
-- [x] Revalidate both hands when an offer is accepted.
-- [x] Display pending and completed trades in the event history.
-- [x] Add UI integration tests for valid, invalid, stale, cancelled, maritime, and domestic trades.
+## C4. Product, policy, and legal readiness
 
-### Done when
+**Depends on:** A
 
-Players can perform every legal bank, port, and player trade without directly editing resource totals.
+**Parallel with:** all engineering workstreams
 
-## Milestone 6: Development cards
+**Exit:** public distribution, naming, data use, and user support have explicit owners and decisions.
 
-- [x] Add a Buy Development Card control with its cost and availability.
-- [x] Display development cards privately to their owner.
-- [x] Indicate cards bought this turn that cannot yet be played.
-- [x] Add the Knight workflow using the robber interaction mode.
-- [x] Add resource selection for Year of Plenty.
-- [x] Add resource selection for Monopoly.
-- [x] Add one-or-two-road placement for Road Building.
-- [x] Keep victory-point cards hidden while including them in scoring.
-- [x] Enforce the one-development-card-per-turn rule in the UI.
-- [x] Add UI integration tests for buying and playing every development-card type.
+- [ ] **[P0][C4-01]** Complete an intellectual-property review of the product name, rules presentation, visual assets, and public distribution; license or rebrand before launch where required.
+- [ ] **[P0][C4-02]** Publish a privacy policy covering room identifiers, seat credentials, logs, local storage, optional camera/microphone media, retention, and deletion.
+- [ ] **[P0][C4-03]** Define data-retention periods for abandoned rooms, active snapshots, logs, and support artifacts.
+- [ ] **[P0][C4-04]** Provide a support/contact and security-reporting path.
+- [ ] **[P1][C4-05]** Publish terms of use and community expectations appropriate to the release audience.
+- [ ] **[P1][C4-06]** Choose production branding, domain, release notes, onboarding copy, and a basic status/incident communication channel.
 
-### Done when
+## D1. Authoritative room server
 
-Every development card supported by the engine can be bought, privately inspected, and legally resolved from the UI.
+**Depends on:** B, C1, C2, C3
 
-## Milestone 7: Scoring, awards, and game completion
+**Parallel with:** D2 after C2 stabilizes
 
-- [x] Display public settlement and city points.
-- [x] Display Longest Road owner and length.
-- [x] Display Largest Army owner and knight count.
-- [x] Show each player their private victory-point total.
-- [x] Add focused engine tests for branching roads, loops, blocked roads, award transfers, and hidden victory points.
-- [x] Add `getScoreBreakdown` / `publicVictoryPoints` helpers for scoreboard UI.
-- [x] Show a game-over screen when a player reaches the configured victory target.
-- [x] Display the winner and final public scores.
-- [x] Add confirmed Restart Game and New Game actions.
-- [x] Add an automated end-to-end scenario that reaches a legal victory.
+**Exit:** automated clients can create a room and complete a full authoritative game without LiveKit.
 
-### Done when
+- [ ] **[P0][D1-01]** Create rooms with collision-resistant human-friendly codes and explicit expiration.
+- [ ] **[P0][D1-02]** Implement join, seat/color claim, ready, start, presence, leave, and host/lobby-role behavior.
+- [ ] **[P0][D1-03]** Store the only full authoritative lobby and game state on the server.
+- [ ] **[P0][D1-04]** Generate the board, dice, development deck, and theft outcomes exclusively on the server.
+- [ ] **[P0][D1-05]** Serialize command handling per room and apply every game mutation through server-side `applyAction`.
+- [ ] **[P0][D1-06]** Authenticate the sender's seat and reject malformed, unauthorized, stale, duplicate, illegal, and out-of-turn commands.
+- [ ] **[P0][D1-07]** Acknowledge every command with its command ID and authoritative version.
+- [ ] **[P0][D1-08]** Send each connection only its `getPlayerView` plus explicitly public lobby/events.
+- [ ] **[P0][D1-09]** Bound in-memory command deduplication and event history so long games cannot grow without limit.
+- [ ] **[P0][D1-10]** Add deterministic room-level integration tests covering a full game path and all rejection classes.
 
-A local game can proceed from setup through a rules-validated victory without unsupported phases or manual state changes.
+## D2. Client transport and media separation
 
-## Milestone 8: Multiplayer-ready privacy boundary
+**Depends on:** C2
 
-Goal: **full engine state is never the multiplayer wire format.** One seat sees only what `getPlayerView(game, playerId)` allows. This is the shared contract for the local UI today and for server→client payloads later (M10–11).
+**Parallel with:** D1
 
-### Engine / contract
+**Exit:** the UI does not know whether commands are handled locally or by the production server, and media is optional.
 
-- [x] Implement `getPlayerView(game, playerId)` as the shared state-sanitization boundary.
-- [x] Hide opponent resource breakdowns (`resources: null`, public `resourceCount` only).
-- [x] Hide opponent development card types (`developmentCards: null`, public count only).
-- [x] Never expose development-deck composition (count only).
-- [x] Split public vs private VP (`publicVictoryPoints` / `privateVictoryPoints`).
-- [x] Redact production/robbery details that would leak private cards to bystanders.
-- [x] Unit tests that private card identities never appear in another player's view.
-- [x] Document the privacy contract in `src/rules/README.md`.
+- [ ] **[P0][D2-01]** Introduce a transport interface for connect, command, acknowledgement, snapshot, reconnect, and leave.
+- [ ] **[P0][D2-02]** Keep the local simulator behind a local transport adapter for development and deterministic browser tests.
+- [ ] **[P0][D2-03]** Add the production HTTP/WebSocket adapter against the C2 contract.
+- [ ] **[P0][D2-04]** Render only server-provided player views in online mode; never retain or infer another seat's private state.
+- [ ] **[P0][D2-05]** Remove gameplay dependence on LiveKit membership and data packets.
+- [ ] **[P0][D2-06]** Load and join LiveKit only after the player explicitly enables optional media.
+- [ ] **[P0][D2-07]** Show incompatible-client, disconnected, reconnecting, rejected-command, and server-unavailable states without corrupting local UI state.
+- [ ] **[P1][D2-08]** Remove the host-authoritative production transport after server dogfood proves replacement behavior; retain only deliberate development fallback code.
 
-### Client usage (local app as reference multiplayer client)
+## E. Integrated online game
 
-- [x] Derive seat UI from `usePlayerView` / `getPlayerView` for hands and private outcomes (`ResourceStrip`, `RollOutcome`, scoreboard private total).
-- [x] Keep `applyAction` on **full** authoritative state (view is display-only; never the rules source of truth).
-- [x] Audit remaining UI so private hands are not rendered for non-viewer seats in multiplayer mode (`sharedDeviceMode=false`). Local hot-seat keeps `sharedDeviceMode=true` for discard/trade forms.
-- [x] Face-down 3D racks use count-only cards for non-viewer seats when a playerView is present.
-- [x] Trade accept UI in multiplayer mode only probes the local seat’s resources.
-- [x] Development panel uses seat view for card list / affordability and deck **count** only.
-- [x] Treat “send `getPlayerView` per connected seat” as the required multiplayer transport rule when M10/M11 start (no full-state broadcast).
+**Depends on:** D1, D2
 
-### Explicitly out of scope for M8 (see Future milestone)
+**Parallel with:** contained C4 and performance work that does not touch transport/room files
 
-- Pass-and-play device handoff / “reveal seat” confirmation  
-- Local save / resume to `localStorage`  
-- Online reconnect and server-side game persistence (M11–12)
+**Exit:** `1.0.0-alpha.1`—three or four remote clients can finish a server-authoritative game.
 
-### Done when (multiplayer readiness)
+- [ ] **[P0][E-01]** Add clear Create Table and Join Table flows with code validation and shareable invite links.
+- [ ] **[P0][E-02]** Add seat/color selection, connected/ready state, host start controls, and actionable lobby errors.
+- [ ] **[P0][E-03]** Route every setup and gameplay action through the server adapter and reconcile acknowledgements/snapshots.
+- [ ] **[P0][E-04]** Preserve all existing rules workflows, compact controls, 3D interactions, and game-over behavior in online mode.
+- [ ] **[P0][E-05]** Make voice/video an optional action after joining the game; denial or failure of media permission must not block play.
+- [ ] **[P0][E-06]** Show presence, temporary disconnect, reconnect, explicit leave, and abandoned-seat states.
+- [ ] **[P0][E-07]** Prove host departure leaves the authoritative game available to remaining players.
+- [ ] **[P0][E-08]** Add multi-browser Playwright coverage for lobby, setup, normal turns, robber, trade, development cards, and victory.
+- [ ] **[P1][E-09]** Add a rematch flow that retains the room and seated players.
 
-- [x] A single function defines what one player is allowed to know.
-- [x] Tests lock the non-leak guarantees for hands, VP cards, and deck.
-- [x] The local client already demonstrates view-based rendering for the main private surfaces.
-- [x] Remaining UI audit complete (checkbox above).
-- [x] Multiplayer milestones reference this boundary instead of inventing a second sanitizer.
+## F1. Persistence and reconnect
 
+**Depends on:** E
 
-## Milestone 9: Local release quality
+**Parallel with:** F2, F3, F4
 
-- [x] Add contextual rules help and a build-cost reference.
-- [x] Add confirmations for expensive or irreversible actions where useful.
-- [x] Review keyboard, touch, focus, color contrast, and screen-reader accessibility.
-- [x] Test the complete game on desktop and mobile viewports.
-- [x] Add deterministic test-board and dice controls available only in development/test builds.
-- [x] Resolve production bundle-size warnings or document the accepted tradeoff. *(documented in `docs/bundle-size.md`)*
-- [x] Run `npm test`, board-rules, Playwright e2e, and `npm run build` in CI (`.github/workflows/ci.yml`).
+**Exit:** active games recover correctly across client and server interruptions.
 
-### Done when
+- [ ] **[P0][F1-01]** Persist an active-room snapshot after every accepted state-changing command.
+- [ ] **[P0][F1-02]** Restore the room, versions, command-deduplication state, seats, and required RNG state after eviction/restart.
+- [ ] **[P0][F1-03]** Reconnect a refreshed client using its server-issued credential and deliver the latest seat-scoped snapshot.
+- [ ] **[P0][F1-04]** Recover from missed messages by replacing client state with an authoritative versioned snapshot.
+- [ ] **[P0][F1-05]** Define reconnect grace, explicit leave, seat abandonment, room expiration, and cleanup behavior.
+- [ ] **[P0][F1-06]** Test schema migration or explicit safe refusal for every persisted-state change introduced before release.
+- [ ] **[P0][F1-07]** Prove an active game survives the normal production deployment procedure.
+- [ ] **[P1][F1-08]** Add an operator-supported active-room export/restore tool that preserves private-state controls.
 
-The local game is understandable, accessible, repeatably testable, and ready to be treated as the stable client foundation.
+## F2. Security and privacy hardening
 
-## Milestone 10: Client / hosted UI performance
+**Depends on:** E and C2
 
-### Recommended execution order
+**Parallel with:** F1, F3, F4
 
-Use this sequence as the authoritative priority order; the categorized inventory below describes the implementation areas.
+**Exit:** the public boundary has a reviewed threat model and automated abuse/privacy tests.
 
-1. **Measure first.** Record first usable board time, action-to-scene-update time, renderer recreation count, mobile FPS during dice/highlights, transfer size, render calls, and triangle count.
-2. **Set release targets.** Define acceptable first-load and action-update budgets on a representative mid-range phone and desktop.
-3. **Take contained wins.** Compress the approximately 9.4 MB wood and 1.1 MB plastic textures, disable `preserveDrawingBuffer` outside screenshot tests, cap mobile pixel ratio, and reduce mobile shadow cost.
-4. **Refactor the scene as one coordinated project.** Create the renderer/camera/controls once, keep the board layer stable, and update pieces, robber, highlights, racks, and dice independently.
-5. **Remeasure before secondary optimization.** Add on-demand rendering, LiveKit lazy loading, or React memoization only when profiling shows they remain valuable.
-6. **Verify delivery after choosing a host.** CDN headers and Brotli/gzip are deployment checks, not prerequisites for the scene refactor.
+- [ ] **[P0][F2-01]** Write a threat model for seat theft, room-code guessing, command replay, stale clients, malformed payloads, cross-origin requests, information leaks, and denial of service.
+- [ ] **[P0][F2-02]** Validate every HTTP and WebSocket payload and enforce strict size limits.
+- [ ] **[P0][F2-03]** Add rate limits for room creation/join, authentication failures, and commands.
+- [ ] **[P0][F2-04]** Enforce the production origin allowlist and document cookie/bearer-token, CSRF, and CORS decisions.
+- [ ] **[P0][F2-05]** Rotate/revoke seat credentials and prevent a replaced connection from continuing to command the seat.
+- [ ] **[P0][F2-06]** Ensure logs, errors, analytics, snapshots sent to clients, and LiveKit metadata never expose hidden hands, deck order, credentials, or secrets.
+- [ ] **[P0][F2-07]** Scope optional LiveKit tokens to the authenticated room/identity instead of trusting arbitrary client-provided grants.
+- [ ] **[P0][F2-08]** Add automated wire-capture privacy tests for every seat and spectator-like unauthenticated client.
+- [ ] **[P0][F2-09]** Add dependency/security scanning and resolve high/critical production findings.
+- [ ] **[P1][F2-10]** Add CSP and other applicable browser security headers and verify them in deployment tests.
 
-Current evidence and scope corrections:
+## F3. Production UX, accessibility, and performance
 
-- `CatanScene` recreates the renderer, camera, controls, and full world on ordinary game updates.
-- Shared texture caching is already implemented, so texture network fetch/decode is not repeated. The remaining rebuild cost is renderer, materials, geometry, and scene layers.
-- The incremental scene, stable board, and patchable layer items should be owned as one refactor rather than divided among developers editing `CatanScene.jsx` in parallel.
-- `React.memo` alone will not solve legitimate scene dependency changes.
-- Performance work may proceed in parallel with server work when file ownership stays separated (`CatanScene`/assets versus server/room modules).
+**Depends on:** E; contained asset work may begin after A
 
-Make the table feel smooth during play (not just on first load). The sections below are an implementation inventory; follow the recommended execution order above.
+**Parallel with:** F1, F2, F4 when file ownership does not overlap
 
-Primary pain today: `CatanScene` rebuilds the entire WebGL world when placements, highlights, dice, or hands change—see `src/components/CatanScene.jsx` effect dependencies.
+**Exit:** supported mobile and desktop devices meet the agreed usability and performance budgets.
 
-### P0 — largest smoothness gains
+- [ ] **[P0][F3-01]** Test create/join, full gameplay, reconnect, media opt-in, and errors at supported desktop/mobile breakpoints with mouse and touch.
+- [ ] **[P0][F3-02]** Preserve keyboard/focus semantics, screen-reader labels, contrast, reduced-motion behavior, and non-color-only status indicators.
+- [ ] **[P0][F3-03]** Compress/resize the multi-megabyte table textures and use an appropriate modern production format with fallback.
+- [ ] **[P0][F3-04]** Disable test-only `preserveDrawingBuffer` in production, cap mobile pixel ratio, and reduce mobile shadow cost.
+- [ ] **[P0][F3-05]** Lazy-load LiveKit/media code so board-only players do not pay its startup cost.
+- [ ] **[P0][F3-06]** Measure and enforce first-usable-board, command-to-visible-update, reconnect, bundle-size, and mobile frame-rate budgets.
+- [ ] **[P0][F3-07]** Verify CDN caching and Brotli/gzip for hashed assets on the selected frontend host.
+- [ ] **[P1][F3-08]** Reuse stable materials and remove unnecessary scene-update settling delays.
+- [ ] **[P1][F3-09]** Render on demand when idle; animate only while controls, dice, or highlights require frames.
+- [ ] **[P1][F3-10]** Add a clear stale-version/update-required prompt that preserves the user's room reconnect path.
+- [ ] **[P0][F3-11]** Keep build costs available in compact controls through visible text or an equally discoverable accessible pattern.
+- [ ] **[P1][F3-12]** Restore compact contextual rules help and an action/event history without covering the 3D board on supported screens.
+- [ ] **[P1][F3-13]** Profile the React/Three.js boundary and memoize or split control state only where measurements show avoidable scene work.
 
-- [x] **Incremental 3D scene updates:** keep one long-lived renderer/scene; update separate groups for hexes, pieces, highlights, racks, and dice instead of dispose+rebuild on every game change.
-- [x] **Stable board layer:** only rebuild hexes/ports/table when the board seed (or topology) changes; leave pieces/highlights as patchable layers.
-- [x] **Cache shared texture loads:** wood/plastic network fetch and decode are reused across scene rebuilds.
-- [ ] **Reuse stable scene materials and remove rebuild settling:** retain shared materials/layers across updates and do not wait ~1.5s after ordinary actions.
+## F4. Operations, observability, and cost control
 
-### P1 — load time and mobile FPS
+**Depends on:** C3; full validation depends on E
 
-- [ ] **Compress and modernize table textures:** shrink `wood.jpg` / `plastic.jpg` (today multi‑MB JPEGs); prefer WebP/AVIF or lower resolution; optional solid-color fallback on low-end devices.
-- [ ] **Production renderer flags:** set `preserveDrawingBuffer: false` outside Playwright/tests; cap `devicePixelRatio` on mobile (e.g. 1–1.5).
-- [ ] **Cheaper shadows on small screens:** reduce shadow map size (e.g. 512) or disable shadows on mobile / low power.
+**Parallel with:** F1, F2, F3
 
-### P2 — steady frame time and startup
+**Exit:** an operator can detect, diagnose, mitigate, and communicate production failures.
 
-- [ ] **On-demand rendering:** stop continuous `requestAnimationFrame` when idle; render while OrbitControls damp, dice animate, or highlights pulse.
-- [ ] **Lazy-load LiveKit:** dynamic-import table voice/video only when the player joins a call so the board JS path stays lighter on first paint.
-- [ ] **React boundary around the scene:** memoize `CatanScene` props / split control-panel state so panel updates do not force unnecessary Three.js work.
+- [ ] **[P0][F4-01]** Add structured logs keyed by environment, room ID, connection/session ID, command ID, state version, protocol version, result, and latency—without private game contents.
+- [ ] **[P0][F4-02]** Add metrics for active rooms/connections, create/join failures, command accepts/rejects, reconnects, persistence failures, latency, errors, and runtime/storage usage.
+- [ ] **[P0][F4-03]** Configure error monitoring and actionable alerts for availability, elevated failures, persistence errors, and cost anomalies.
+- [ ] **[P0][F4-04]** Add health/readiness checks and a deployment smoke test that creates, joins, commands, persists, and reloads a test room.
+- [ ] **[P0][F4-05]** Document incident response, rollback, secret rotation, room recovery, provider outage behavior, and user communication.
+- [ ] **[P0][F4-06]** Set provider budgets/alerts and validate expected Netlify, game-runtime, storage, and optional LiveKit subscription costs under the release load target.
+- [ ] **[P0][F4-07]** Define retention and deletion jobs and verify expired rooms no longer consume storage.
+- [ ] **[P1][F4-08]** Add a minimal internal diagnostic view or documented queries for support without exposing hidden state.
 
-### P3 — hosting and delivery (first visit)
+## G. Release validation and launch
 
-- [ ] **CDN / cache headers** for hashed Vite assets (Netlify defaults are often fine; verify long-cache for `assets/*`).
-- [ ] **Confirm Brotli/gzip** for JS/CSS on the host.
-- [ ] **Revisit bundle budget** before multiplayer launch (`docs/bundle-size.md`); treat unexpected main-chunk growth as a release gate.
+**Depends on:** all P0 items in F1–F4 and C4
 
-### Done when
+**Parallel with:** low-risk P1 polish only
 
-Placing pieces, changing highlights, and rolling dice no longer hitch the UI; first load is acceptable on mid-range phones; production builds do not pay for test-only renderer settings.
+**Exit:** release checklist passes on the exact production candidate and `v1.0.0` is tagged from that revision.
 
-## Milestone 11: Multiplayer server foundation
+### Automated release gates
 
-Begin once the local client is stable; can overlap with M10 performance work if files stay separated (`CatanScene` vs room/server modules).
+- [ ] **[P0][G-01]** Run all rules, client, server, contract, persistence, security, build, render, and multi-client browser suites in CI.
+- [ ] **[P0][G-02]** Complete full three-player and four-player games using separate browser contexts against the production server implementation.
+- [ ] **[P0][G-03]** Test simultaneous commands, retries, duplicates, stale versions, unauthorized seats, malformed/oversized payloads, and room-code abuse.
+- [ ] **[P0][G-04]** Test refresh, network interruption, host departure, missed snapshots, service eviction/restart, and deployment during an active game.
+- [ ] **[P0][G-05]** Prove every outbound payload preserves the `getPlayerView` privacy contract.
+- [ ] **[P0][G-06]** Prove LiveKit/media denial or outage does not block or desynchronize gameplay.
+- [ ] **[P0][G-07]** Load-test the agreed concurrent-room/player target and stay inside latency, error-rate, storage, and cost budgets.
 
-- [ ] Choose and document the server runtime, transport, and persistence approach.
-- [ ] Create rooms and human-friendly join codes.
-- [ ] Add join, leave, seat assignment, color selection, ready state, and game start.
-- [ ] Store the authoritative game state on the server.
-- [ ] Run all player commands through server-side `applyAction`.
-- [ ] Reject malformed, stale, unauthorized, and out-of-turn commands.
-- [ ] Add monotonically increasing state/action versions.
-- [ ] Add idempotent command IDs and acknowledgements so retries cannot apply an action twice.
-- [ ] Keep board generation, dice, robber theft, and development-deck order server-authoritative.
+### Release process
 
-## Milestone 12: Real-time multiplayer and private state
+- [ ] **[P0][G-08]** Run an invited alpha, record defects/operational gaps, and meet the alpha exit criteria.
+- [ ] **[P0][G-09]** Run a hosted beta/soak period with production observability and meet the beta exit criteria.
+- [ ] **[P0][G-10]** Freeze `1.0.0-rc.1`; permit only reviewed release-blocker fixes and rerun every gate after changes.
+- [ ] **[P0][G-11]** Verify production environment variables, domains, TLS, policies, support contacts, dashboards, alerts, provider budgets, and rollback.
+- [ ] **[P0][G-12]** Perform and document a rollback/recovery drill using the release candidate.
+- [ ] **[P0][G-13]** Publish release notes and known limitations, update the app/package version, expose build revision diagnostics, and tag `v1.0.0`.
+- [ ] **[P0][G-14]** Monitor the launch window with explicit owners and go/no-go/rollback authority.
 
-- [ ] Synchronize commands and public state over WebSockets.
-- [ ] Send each client only `getPlayerView(game, seatId)` (M8 boundary)—never the full engine state.
-- [ ] Broadcast public events without leaking hidden resources or development cards.
-- [ ] Restore identity after a page refresh.
-- [ ] Reconnect players to the latest state.
-- [ ] Handle disconnects, abandoned games, and host departure.
-- [ ] Add multiplayer tests using multiple simultaneous clients.
-- [ ] Add explicit leave/abandon behavior, reconnect status, and state-snapshot recovery after missed events.
-- [ ] Add a rematch flow that can retain the room and seated players.
+## v1.0.0 release checklist
 
-## Milestone 13: Persistence, operations, and security
+All statements must be true; a P0 exception requires an explicit no-go decision, not a silent deferral.
 
-Server-side and ops only (not local browser save).
+- [ ] Full three- and four-player games work on supported separate devices.
+- [ ] The server is the only gameplay authority and host departure does not end the game.
+- [ ] Active games recover after client refresh, server restart/eviction, and normal deployment.
+- [ ] No client or operational output receives another player's hidden information.
+- [ ] Voice/video is optional and isolated from gameplay availability.
+- [ ] Security, privacy, IP/naming, retention, and support requirements are complete.
+- [ ] Performance, concurrency, availability, and cost budgets pass.
+- [ ] Monitoring, alerts, incident response, rollback, and provider budgets are active.
+- [ ] CI and release-candidate validation pass on the exact tagged revision.
 
-- [ ] Persist active games and restore them after a server restart.
-- [ ] Optionally store completed-game history and replays.
-- [ ] Add command rate limiting and payload-size limits.
-- [ ] Add structured server logs and error monitoring.
-- [ ] Add deployment configuration and environment documentation.
-- [ ] Test reconnects, duplicate commands, stale versions, and information-leak boundaries.
+## P2: explicitly deferred beyond v1.0.0
 
-### Online done when
+These may be researched or designed, but must not delay the critical path unless promoted through a documented scope decision:
 
-Three or four players on separate clients can join a room, complete a game, reconnect safely, and never receive another player's hidden information.
-
-## Future (low priority): Local convenience
-
-Not required for multiplayer. Build only if local hot-seat or long offline sessions become a product goal.
-
-- [ ] Pass-and-play screen between local players (hide previous seat before next views private UI).
-- [ ] Confirmation before revealing the active player's private view on a shared device.
-- [ ] Local save / resume of a single-device game (`localStorage` or file dump of engine state).
-- [ ] Dev-only state export for bug reports.
+- Public matchmaking and room discovery.
+- User accounts, profiles, friends, invitations, and cross-device identity.
+- Spectator mode.
+- Bots or single-player AI.
+- Text chat, moderation systems, and social features beyond optional table media.
+- Leaderboards, ratings, achievements, seasons, and progression.
+- Completed-game history, replay UI, and shareable replays.
+- Native mobile applications or a separate phone-controller application.
+- Local pass-and-play privacy handoff and local save/resume.
+- Additional maps, expansions, house rules, or configurable rule variants.
+- Cosmetic marketplace, advanced avatars, elaborate animation polish, and nonessential visual effects.
+- Multi-region active/active game authority before measured demand requires it.
 
 ## Verification commands
 
+Keep these commands green throughout development; add server and multi-client commands as their packages are introduced.
+
 ```bash
 npm test
-npm run test:ci   # unit + board-rules + build + e2e (mirrors GitHub Actions)
+npm run test:rules
 npm run build
+npm run test:e2e
+npm run test:ci
 ```

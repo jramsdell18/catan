@@ -2,6 +2,8 @@
 
 React + Three.js starter for a local multiplayer Catan-style game.
 
+The current host-authoritative full-game experience is the MVP. See the **[`v1.0.0 production plan`](TODO.md)** for the server-authoritative public-release roadmap, dependencies, release blockers, and deferred nice-to-haves.
+
 ## Run locally
 
 ```bash
