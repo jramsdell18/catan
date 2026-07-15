@@ -2,6 +2,12 @@
 
 This is the forward-looking production roadmap (previously `TODO.md`). The previous implementation roadmap has been retired: its completed work is summarized as the MVP baseline below, and its unfinished production-relevant work has been migrated into this plan.
 
+## Scope: what this roadmap does not cover
+
+A **UI overhaul** is planned as separate work with its own user-experience roadmap (not yet written): the non-3D (DOM/overlay) rendering becomes development-only, and all information a player needs moves into the 3D UI. That work is intentionally **not** part of this plan — this document covers the functional/architectural path to `v1.0.0` (server authority, privacy, persistence, security, operations, release).
+
+Until the UX roadmap exists, treat UI-facing items here (MVP-01, F3-02, F3-11, F3-12) as behavior contracts, not layout decisions: costs must stay discoverable and accessibility must be preserved in whatever surface — DOM today, 3D UI after the overhaul — presents them. D2's transport boundary is deliberately UI-agnostic, so the overhaul can proceed against the same adapter without reopening this plan.
+
 ## Current status: MVP complete
 
 The current application is the **MVP**:

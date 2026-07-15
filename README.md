@@ -2,7 +2,7 @@
 
 React + Three.js starter for a local multiplayer Catan-style game.
 
-The current host-authoritative full-game experience is the MVP. See the **[`v1.0.0 production plan`](ROADMAP.md)** for the server-authoritative public-release roadmap, dependencies, release blockers, and deferred nice-to-haves.
+The current host-authoritative full-game experience is the MVP. See the **[`v1.0.0 production plan`](ROADMAP.md)** for the server-authoritative public-release roadmap, dependencies, release blockers, and deferred nice-to-haves. A UI overhaul (non-3D rendering becomes dev-only; all player-facing information moves into the 3D UI) is separate planned work with its own user-experience roadmap, not covered by that plan.
 
 ## Run locally
 
