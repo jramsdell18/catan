@@ -47,13 +47,13 @@ Release success means:
 flowchart LR
     MVP["MVP baseline"] --> BASE["0: Stabilize MVP baseline"]
     MVP --> ARCH["A: Architecture contract"]
+    MVP --> PRODUCT["C4: Product and legal"]
     BASE --> SPIKE["B: Runtime spike"]
     ARCH --> SPIKE
     ARCH --> RULES["C1: Shared rules package"]
     BASE --> RULES
     ARCH --> PROTOCOL["C2: Protocol and versions"]
     BASE --> PROTOCOL
-    ARCH --> PRODUCT["C4: Product and legal"]
     SPIKE --> PLATFORM["C3: Service and delivery foundation"]
     RULES --> SERVER["D1: Authoritative room server"]
     RULES --> CLIENT["D2: Client transport boundary"]
@@ -85,7 +85,7 @@ flowchart LR
 | C1 | Shared rules package | P0 | 0, A | B, C2, C4 |
 | C2 | Protocol, identity, and versions | P0 | 0, A | B, C1, C4 |
 | C3 | Service/deployment foundation | P0 | B | C1, C2, C4 |
-| C4 | Product, policy, and legal readiness | P0/P1 | A | All engineering workstreams; start C4-01 immediately (long lead, gates G-08) |
+| C4 | Product, policy, and legal readiness | P0/P1 | Current `origin/main` | Every technical workstream; IP, trademark, copyright, asset, and naming work starts immediately |
 | D1 | Authoritative room server | P0 | B, C1, C2, C3 | D2 after protocol contract stabilizes |
 | D2 | Client transport and media separation | P0 | C1, C2 | D1, with explicit ownership of shared client modules |
 | E | Integrated online game | P0 | D1, D2 | Focused performance and policy work |
@@ -197,18 +197,18 @@ Suggested prerelease progression:
 
 ## C4. Product, policy, and legal readiness
 
-**Depends on:** A
+**Depends on:** current `origin/main`. IP, trademark, copyright, asset-provenance, and naming research has no technical prerequisite.
 
-**Parallel with:** all engineering workstreams. Start C4-01 immediately after A: it is the longest-lead release risk, it drives C4-06 branding/domain/copy decisions, and it gates any public distribution including the invited alpha (G-08).
+**Parallel with:** 0, A, and every later engineering workstream. Start C4-01 and candidate naming immediately: they are long-lead release risks and gate any public distribution, including the invited alpha (G-08). Privacy and retention research may also start now, but the final C4-02/C4-03 policies must reflect the topology and data ownership established by A-03/A-04.
 
 **Exit:** public distribution, naming, data use, and user support have explicit owners and decisions.
 
-- [ ] **[P0][C4-01]** Complete an intellectual-property review of the product name, rules presentation, visual assets, and public distribution. Plan for the likely outcome being a rebrand — "Catan" is an actively enforced registered trademark — and license or rebrand before any public distribution. This item must be complete before the invited alpha (G-08), not merely before launch.
+- [ ] **[P0][C4-01]** Start immediately and complete an intellectual-property review covering trademarks and naming, copyrightable rules text and audiovisual expression, trade dress, source/license provenance for every visual/audio asset, domains/store listings, and public or commercial distribution. Inventory current repository risks and document the viable paths: obtain a license, complete an original rebrand with independently created text/assets/presentation, or keep the project private and non-distributed. Plan for the likely public-release outcome being a rebrand — "Catan" is an actively enforced registered trademark — and obtain qualified legal review where material uncertainty remains. This item must be complete before the invited alpha (G-08), not merely before launch.
 - [ ] **[P0][C4-02]** Publish a privacy policy covering room identifiers, seat credentials, logs, local storage, optional camera/microphone media, retention, and deletion.
 - [ ] **[P0][C4-03]** Define data-retention periods for abandoned rooms, active snapshots, logs, and support artifacts.
 - [ ] **[P0][C4-04]** Provide a support/contact and security-reporting path.
 - [ ] **[P1][C4-05]** Publish terms of use and community expectations appropriate to the release audience.
-- [ ] **[P1][C4-06]** Choose production branding, domain, release notes, onboarding copy, and a basic status/incident communication channel.
+- [ ] **[P1][C4-06]** Begin candidate naming and availability screening immediately; after C4-01 resolves the acceptable IP path, finalize production branding, domain, release notes, onboarding copy, and a basic status/incident communication channel.
 
 ## D1. Authoritative room server
 
