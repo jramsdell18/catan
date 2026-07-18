@@ -1,6 +1,6 @@
 # Multiplayer V1 architecture decision
 
-**Status:** proposed product/architecture direction for planning — **not locked** until the Durable Object (or chosen Node) runtime spike succeeds.
+**Status:** the server-authoritative product boundary is **adopted** in the [production architecture contract](production-architecture.md); only the game-service runtime remains **not locked** until the Durable Object (or chosen Node) runtime spike succeeds.
 
 **Proposed decision:** build **Approach B** (server-authoritative game). Prefer **one Cloudflare Durable Object per room** as the first hosting candidate. Keep the existing host-authoritative LiveKit path only as a local/dogfood transport while the server path is built. If the Workers/DO path fails the spike or team preferences favor conventional Node, fall back to a **thin Node WebSocket room service** or **Colyseus** (peer alternatives—not ranked as “raw WS last”).
 

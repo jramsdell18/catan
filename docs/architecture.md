@@ -23,6 +23,8 @@ flowchart LR
 - **The host browser** is the current game authority.
 - **Local test mode** runs the same rules locally without joining LiveKit and is available only in development builds.
 
+Known MVP limitations: host departure halts play for everyone, the complete game state — including hidden hands and deck order — crosses the LiveKit data channel, gameplay availability is coupled to LiveKit, and active games do not survive refreshes or restarts.
+
 The production plan moves game authority to a dedicated room service. Cloudflare Durable Objects are the preferred candidate pending a spike; a thin Node service or Colyseus are fallbacks. LiveKit then becomes optional media only. See the [production architecture contract](production-architecture.md) and [ROADMAP.md](../ROADMAP.md).
 
 ## Main tools
