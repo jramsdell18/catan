@@ -100,9 +100,9 @@ flowchart LR
 
 **Exit:** the exact MVP baseline is green and its intentional compact-control behavior is covered by current tests.
 
-- [ ] **[P0][MVP-01]** Reconcile compact build controls with the player-facing cost contract: keep road/settlement/city costs discoverable and accessible even if the visible buttons use `R`, `S`, and `C` shorthand.
-- [ ] **[P0][MVP-02]** Update the stale building-flow Playwright assertion to test the intended compact UI without weakening resource-cost and disabled-state coverage.
-- [ ] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before implementation workstreams (B, C1–C3) begin.
+- [x] **[P0][MVP-01]** Reconcile compact build controls with the player-facing cost contract: keep road/settlement/city costs discoverable and accessible even if the visible buttons use `R`, `S`, and `C` shorthand.
+- [x] **[P0][MVP-02]** Update the stale building-flow Playwright assertion to test the intended compact UI without weakening resource-cost and disabled-state coverage.
+- [x] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before implementation workstreams (B, C1–C3) begin.
 - [x] **[P1][MVP-04]** Record the MVP's known limitations and the production migration boundary in the maintained architecture documentation.
 
 ## A. Architecture contract
