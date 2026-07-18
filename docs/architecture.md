@@ -23,7 +23,7 @@ flowchart LR
 - **The host browser** is the current game authority.
 - **Local test mode** runs the same rules locally without joining LiveKit and is available only in development builds.
 
-The production plan moves game authority to a dedicated room service. Cloudflare Durable Objects are the preferred candidate pending a spike; a thin Node service or Colyseus are fallbacks. LiveKit then becomes optional media only. See [ROADMAP.md](../ROADMAP.md).
+The production plan moves game authority to a dedicated room service. Cloudflare Durable Objects are the preferred candidate pending a spike; a thin Node service or Colyseus are fallbacks. LiveKit then becomes optional media only. See the [production architecture contract](production-architecture.md) and [ROADMAP.md](../ROADMAP.md).
 
 ## Main tools
 

@@ -6,6 +6,8 @@
 
 **Related roadmap:** [`ROADMAP.md`](../ROADMAP.md), especially A (architecture), B (runtime spike), C1–C3 (shared rules, protocol, and service foundation), D1–D2 (server and client boundaries), and F1–F4 (production hardening).
 
+**Maintained implementation contract:** [`production-architecture.md`](production-architecture.md). This document retains the alternatives and reasoning behind that contract.
+
 **Related code today:** `src/App.jsx` (host `applyAction` + snapshots), `src/game/multiplayerRoom.js`, `src/stream/LiveKitTableCall.jsx` (media + data channel), `netlify/functions/livekit-token.js`, `src/rules/*` (engine + `getPlayerView`).
 
 ---

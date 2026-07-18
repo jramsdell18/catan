@@ -103,7 +103,7 @@ flowchart LR
 - [ ] **[P0][MVP-01]** Reconcile compact build controls with the player-facing cost contract: keep road/settlement/city costs discoverable and accessible even if the visible buttons use `R`, `S`, and `C` shorthand.
 - [ ] **[P0][MVP-02]** Update the stale building-flow Playwright assertion to test the intended compact UI without weakening resource-cost and disabled-state coverage.
 - [ ] **[P0][MVP-03]** Run `npm run test:ci` and restore a fully green MVP baseline before implementation workstreams (B, C1–C3) begin.
-- [ ] **[P1][MVP-04]** Record the MVP's known limitations and the production migration boundary in the maintained architecture documentation.
+- [x] **[P1][MVP-04]** Record the MVP's known limitations and the production migration boundary in the maintained architecture documentation.
 
 ## A. Architecture contract
 
@@ -113,13 +113,13 @@ flowchart LR
 
 **Exit:** stable boundaries are documented before implementation spreads across client and server.
 
-- [ ] **[P0][A-01]** Adopt server-authoritative gameplay as the product architecture; the browser sends commands and renders server responses.
-- [ ] **[P0][A-02]** Keep Cloudflare Durable Objects as the preferred runtime candidate, with thin Node WebSocket service and Colyseus as fallbacks pending the spike.
-- [ ] **[P0][A-03]** Define the production topology: frontend host, game API/WebSocket origin, optional LiveKit media, DNS, TLS, and environment boundaries.
-- [ ] **[P0][A-04]** Define ownership of full game state, lobby state, seat credentials, RNG, player views, media identity, and persistence.
-- [ ] **[P0][A-05]** Define application SemVer, integer `protocolVersion`, integer `stateSchemaVersion`, and Git/build revision reporting.
-- [ ] **[P0][A-06]** Record the decision and diagrams in maintained architecture documentation; distinguish current MVP from target V1.
-- [ ] **[P0][A-07]** Define measurable release budgets: supported browsers/devices, command latency, reconnect window, concurrent rooms/players, availability target, and monthly cost alert threshold.
+- [x] **[P0][A-01]** Adopt server-authoritative gameplay as the product architecture; the browser sends commands and renders server responses.
+- [x] **[P0][A-02]** Keep Cloudflare Durable Objects as the preferred runtime candidate, with thin Node WebSocket service and Colyseus as fallbacks pending the spike.
+- [x] **[P0][A-03]** Define the production topology: frontend host, game API/WebSocket origin, optional LiveKit media, DNS, TLS, and environment boundaries.
+- [x] **[P0][A-04]** Define ownership of full game state, lobby state, seat credentials, RNG, player views, media identity, and persistence.
+- [x] **[P0][A-05]** Define application SemVer, integer `protocolVersion`, integer `stateSchemaVersion`, and Git/build revision reporting.
+- [x] **[P0][A-06]** Record the decision and diagrams in maintained architecture documentation; distinguish current MVP from target V1.
+- [x] **[P0][A-07]** Define measurable release budgets: supported browsers/devices, command latency, reconnect window, concurrent rooms/players, availability target, and monthly cost alert threshold.
 
 Suggested prerelease progression:
 
