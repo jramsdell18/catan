@@ -1,8 +1,10 @@
 # Catan Multiplayer Starter
 
-React + Three.js starter for a local multiplayer Catan-style game.
+Browser-based multiplayer Catan-style game built with React, Three.js, and a UI-independent rules engine.
 
 The current host-authoritative full-game experience is the MVP. See the **[`v1.0.0 production plan`](ROADMAP.md)** for the server-authoritative public-release roadmap, dependencies, release blockers, and deferred nice-to-haves. A UI overhaul (non-3D rendering becomes dev-only; all player-facing information moves into the 3D UI) is separate planned work with its own user-experience roadmap, not covered by that plan.
+
+For a quick explanation of the tools, hosting, code areas, and how they connect, see **[`docs/architecture.md`](docs/architecture.md)**.
 
 ## Run locally
 
@@ -36,7 +38,7 @@ For local video-call testing, run the app through Netlify Dev so the function en
 4. After setup, confirm the phase changes to `roll` and every player has one wood, brick, ore, hay, and sheep.
 5. Select **Roll Dice**. A normal production roll changes the phase to `action`; inspect the resource totals, then select **End Turn** and confirm the current player changes.
 
-The engine already implements robber/discard, building, development cards, and trade commands, but the corresponding UI controls are still to be added. A roll of 7 will therefore display the required phase but cannot yet be completed from the UI.
+Continue through robber/discard, building, development-card, trading, scoring, and game-over workflows to exercise the complete rules integration.
 
 ## Scripts
 
@@ -60,43 +62,4 @@ GitHub Actions runs on **every pull request to `main`** and **every push to `mai
 
 ## Project layout
 
-```text
-src/
-  components/
-    CatanScene.jsx
-    PlayerSetup.jsx
-  game/
-    board.js
-    pieces.js
-    terrain.js
-  three/
-    meshFactories.js
-  App.jsx
-  main.jsx
-  styles.css
-```
-
-The UI is mobile-first so it has a reasonable starting point for small screens before adding more game features.
-
-## 3D board plan
-
-1. Board data
-   - Keep terrain counts and resource mapping in `src/game/terrain.js`.
-   - Generate the 19 base-game hex slots in `src/game/board.js` using the 3-4-5-4-3 island shape.
-   - Randomize terrain from a deck so each board always has the correct counts.
-
-2. Piece data
-   - Keep player colors and piece inventory in `src/game/pieces.js`.
-   - Roads, settlements, and cities use a `player.color` attribute so the same mesh definition can render for any player.
-   - The robber is a neutral piece and starts on the desert.
-
-3. Rendering
-   - Keep Three.js primitive mesh creation in `src/three/meshFactories.js`.
-   - Keep React scene lifecycle and camera controls in `src/components/CatanScene.jsx`.
-   - Start with clean primitive meshes, then replace or enhance the factories later with custom models.
-
-4. Next steps
-   - Add number tokens and the rule that red numbers 6 and 8 should not be adjacent.
-   - Add real vertex/intersection and edge/path coordinates for placing settlements, cities, and roads.
-   - Add click or tap selection for hexes, paths, and intersections.
-   - Add room state, turn state, and multiplayer sync after the board model is stable.
+See **[`docs/architecture.md`](docs/architecture.md)** for the maintained project map and links to architecture guides beside each substantial code area.

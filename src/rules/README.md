@@ -1,6 +1,8 @@
 # Catan rules engine
 
-This directory contains UI-agnostic base-game rules for a 3–4 player multiplayer game. Keep the authoritative state on the server and pass player commands through `applyAction`; it returns a new state and never mutates the supplied state.
+For a short map of the engine's modules and boundaries, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+This directory contains UI-agnostic base-game rules for a 3–4 player multiplayer game. The current MVP runs the authoritative state in the host browser; the production design moves it to the game server. Pass player commands through `applyAction`; it returns a new state and never mutates the supplied state.
 
 ## Board contract
 

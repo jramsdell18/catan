@@ -1,5 +1,7 @@
 # Testing guide
 
+For the short architectural view of the test layers, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 This project has three kinds of automated checks:
 
 | Layer | Tool | What it proves | Speed |
