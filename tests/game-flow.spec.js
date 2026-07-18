@@ -258,22 +258,23 @@ test.describe('setup snake through production turn', () => {
     await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
     await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
 
-    // Compact controls keep R/S/C shorthand; costs stay discoverable via accessible name/title.
+    // Compact controls keep R/S/C shorthand; costs stay discoverable via the stable accessible name.
     await expect(page.getByTestId('build-road')).toHaveText('R');
     await expect(page.getByTestId('build-settlement')).toHaveText('S');
     await expect(page.getByTestId('build-city')).toHaveText('C');
-    await expect(page.getByTestId('build-road')).toHaveAttribute('aria-label', /1 brick \+ 1 wood/);
-    await expect(page.getByTestId('build-settlement')).toHaveAttribute('aria-label', /1 brick \+ 1 wood \+ 1 hay \+ 1 sheep/);
-    await expect(page.getByTestId('build-city')).toHaveAttribute('aria-label', /3 ore \+ 2 hay/);
+    await expect(page.getByTestId('build-road')).toHaveAccessibleName('Build road: 1 brick + 1 wood');
+    await expect(page.getByTestId('build-settlement')).toHaveAccessibleName('Build settlement: 1 brick + 1 wood + 1 hay + 1 sheep');
+    await expect(page.getByTestId('build-city')).toHaveAccessibleName('Build city: 3 ore + 2 hay');
     await expect(page.getByTestId('build-city')).toBeDisabled();
-    await expect(page.getByTestId('build-city')).toHaveAttribute('title', /Requires 3 ore \+ 2 hay/);
+    await expect(page.getByTestId('build-city')).toHaveAttribute('title', 'Build city: 3 ore + 2 hay. Not enough resources.');
 
     await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', {
       wood: 8, brick: 8, ore: 3, hay: 5, sheep: 3,
     }));
     await expect(page.getByTestId('build-city')).toBeEnabled();
-    await expect(page.getByTestId('build-city')).toHaveAttribute('aria-label', /Build city: 3 ore \+ 2 hay/);
-    await expect(page.getByTestId('build-city')).toHaveAttribute('title', /Build city: 3 ore \+ 2 hay/);
+    // Enabling must not change the accessible name; only the hint drops the reason.
+    await expect(page.getByTestId('build-city')).toHaveAccessibleName('Build city: 3 ore + 2 hay');
+    await expect(page.getByTestId('build-city')).toHaveAttribute('title', 'Build city: 3 ore + 2 hay');
 
     const beforeCity = await getTestState(page);
     await page.getByTestId('build-city').click();

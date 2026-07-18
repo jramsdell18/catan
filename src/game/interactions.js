@@ -132,7 +132,7 @@ export function getBuildAvailability(game, targetCounts = {}) {
     let reason = '';
     if (!isActionPhase) reason = 'Available during the action phase.';
     else if (remaining < 1) reason = `No ${targetKey} pieces remaining.`;
-    else if (!affordable) reason = `Requires ${formatCost(cost)}.`;
+    else if (!affordable) reason = 'Not enough resources.';
     else if (!hasTarget) reason = `No legal ${targetKey} locations are available.`;
     return { enabled: Boolean(isActionPhase && remaining > 0 && affordable && hasTarget), cost, remaining, reason };
   };
@@ -145,6 +145,15 @@ export function getBuildAvailability(game, targetCounts = {}) {
 
 export function formatCost(cost) {
   return Object.entries(cost).map(([resource, amount]) => `${amount} ${resource}`).join(' + ');
+}
+
+export function buildControlLabels(label, availability) {
+  // The accessible name must stay stable across enabled/disabled; only the hint carries the reason.
+  const name = `${label}: ${formatCost(availability.cost)}`;
+  return {
+    name,
+    hint: availability.reason ? `${name}. ${availability.reason}` : name,
+  };
 }
 
 export function findRoadPlanToSettlement(game, topology, maxRoads = 6) {

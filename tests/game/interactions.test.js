@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRandomBoard } from '../../src/game/board.js';
 import {
   actionForTarget,
+  buildControlLabels,
   canAfford,
   describeLogEntry,
   formatCost,
@@ -91,7 +92,21 @@ describe('board interaction model', () => {
     actionGame.players[0].resources.brick = 1;
     expect(getBuildAvailability(actionGame, { road: 2 }).road.enabled).toBe(true);
     expect(getBuildAvailability(actionGame, { road: 0 }).road.reason).toMatch(/No legal road/);
+    actionGame.players[0].resources.brick = 0;
+    expect(getBuildAvailability(actionGame, { road: 2 }).road.reason).toBe('Not enough resources.');
     actionGame.players[0].pieces.roads = 0;
     expect(getBuildAvailability(actionGame, { road: 2 }).road.reason).toMatch(/No road pieces/);
+  });
+
+  it('keeps compact control names stable and appends disabled reasons only to the hint', () => {
+    const cost = { wood: 1, brick: 1 };
+    expect(buildControlLabels('Build road', { cost, reason: '' })).toEqual({
+      name: 'Build road: 1 wood + 1 brick',
+      hint: 'Build road: 1 wood + 1 brick',
+    });
+    expect(buildControlLabels('Build road', { cost, reason: 'Not enough resources.' })).toEqual({
+      name: 'Build road: 1 wood + 1 brick',
+      hint: 'Build road: 1 wood + 1 brick. Not enough resources.',
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { INTERACTION_MODES, formatCost } from '../../game/interactions.js';
+import { INTERACTION_MODES, buildControlLabels } from '../../game/interactions.js';
 
 const BUILD_ICONS = {
   road: 'R',
@@ -7,12 +7,8 @@ const BUILD_ICONS = {
 };
 
 function BuildButton({ kind, label, mode, interactionMode, availability, onSelectMode }) {
-  const costText = formatCost(availability.cost);
   // Cost stays discoverable even though the visible control is a single letter.
-  const costLabel = `${label}: ${costText}`;
-  const accessibleName = availability.reason
-    ? `${costLabel}. ${availability.reason}`
-    : costLabel;
+  const { name, hint } = buildControlLabels(label, availability);
 
   return (
     <button
@@ -21,8 +17,8 @@ function BuildButton({ kind, label, mode, interactionMode, availability, onSelec
       data-testid={`build-${kind}`}
       onClick={() => onSelectMode(mode)}
       disabled={!availability.enabled}
-      title={accessibleName}
-      aria-label={accessibleName}
+      title={hint}
+      aria-label={name}
     >
       <span className={`build-icon build-icon-${kind}`} aria-hidden="true">{BUILD_ICONS[kind]}</span>
     </button>
