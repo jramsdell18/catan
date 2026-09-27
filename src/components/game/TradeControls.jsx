@@ -513,13 +513,14 @@ function TradeControls({
       {canStart && (
         <button
           type="button"
-          className="hud-icon-button trade-icon-button"
+          className="hud-icon-button hud-labeled trade-icon-button"
           onClick={() => { reset(); setOpen(true); }}
           aria-label="Trade resources"
           title="Trade resources"
           data-testid="toggle-trades"
         >
-          <SwapIcon />
+          <SwapIcon size={24} />
+          <span className="hud-caption" aria-hidden="true">Trade</span>
         </button>
       )}
       {sheet}

@@ -7,6 +7,9 @@ import {
   createLobbyState,
   getParticipantPlayerId,
   getParticipantRole,
+  getSeatAvailability,
+  isLobbyFull,
+  resolveSeatClaim,
   markParticipantDisconnected,
   markParticipantConnected,
   PLAYER_ROLES,
@@ -151,5 +154,50 @@ describe('multiplayer room lobby helpers', () => {
 
     expect(disconnected.room.status).toBe(ROOM_STATUS.HOST_DISCONNECTED);
     expect(disconnected.seats.find((seat) => seat.playerId === 'red').connected).toBe(false);
+  });
+});
+
+describe('color picker lobby', () => {
+  it('reports seat availability per participant', () => {
+    const claimed = claimSeat(lobby(), { playerId: 'red', participantId: 'host-1', displayName: 'Host' });
+    const forGuest = getSeatAvailability(claimed, 'guest-1');
+    expect(forGuest.map((seat) => seat.status)).toEqual(['taken', 'open', 'open']);
+    expect(getSeatAvailability(claimed, 'host-1')[0].status).toBe('mine');
+  });
+
+  it('resolves a race for the same color: first claim wins, second must pick again', () => {
+    let state = claimSeat(lobby(), { playerId: 'red', participantId: 'host-1', displayName: 'Host' });
+    const first = resolveSeatClaim(state, { playerId: 'blue', participantId: 'guest-1', displayName: 'Ann' });
+    expect(first.result).toEqual({ ok: true, playerId: 'blue' });
+    state = first.lobbyState;
+    const second = resolveSeatClaim(state, { playerId: 'blue', participantId: 'guest-2', displayName: 'Bob' });
+    expect(second.result).toMatchObject({ ok: false, playerId: 'blue', reason: 'taken', takenBy: 'Ann' });
+    expect(second.lobbyState).toBe(state);
+    const retry = resolveSeatClaim(state, { playerId: 'white', participantId: 'guest-2', displayName: 'Bob' });
+    expect(retry.result.ok).toBe(true);
+    expect(getParticipantPlayerId(retry.lobbyState, 'guest-2')).toBe('white');
+  });
+
+  it('detects a full lobby and rejects further claims as full', () => {
+    let state = lobby();
+    ['host-1', 'guest-1', 'guest-2'].forEach((participantId, index) => {
+      state = resolveSeatClaim(state, {
+        playerId: state.seats[index].playerId, participantId, displayName: participantId,
+      }).lobbyState;
+    });
+    expect(isLobbyFull(state, 'guest-3')).toBe(true);
+    expect(isLobbyFull(state, 'guest-1')).toBe(false);
+    expect(resolveSeatClaim(state, { playerId: 'red', participantId: 'guest-3', displayName: 'Late' }).result)
+      .toMatchObject({ ok: false, reason: 'full' });
+    // A seat whose owner dropped out is open again.
+    const dropped = markParticipantDisconnected(state, 'guest-2');
+    expect(isLobbyFull(dropped, 'guest-3')).toBe(false);
+  });
+
+  it('rejects claims after the game started', () => {
+    const active = startLobbyGame(lobby());
+    expect(resolveSeatClaim(active, { playerId: 'red', participantId: 'guest-1', displayName: 'G' }).result)
+      .toMatchObject({ ok: false, reason: 'started' });
+    expect(isLobbyFull(active, 'guest-1')).toBe(false);
   });
 });

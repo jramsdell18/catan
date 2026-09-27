@@ -30,7 +30,8 @@ flowchart LR
 | `bots.js` | Test-only bots: pick a random legal command for setup, discards, and the robber; answer trade offers (accept if affordable); otherwise roll and end the turn |
 | `toasts.js` | Turns new game-log entries into short player-colored toast messages |
 | `resourceDisplay.js` | Resource order, labels, and icons shared by HUD and trade UI |
-| `multiplayerRoom.js` | Current client-side lobby model, seats, roles, presence, and LiveKit message names |
+| `multiplayerRoom.js` | Current client-side lobby model, seats, roles, presence, color-claim validation (`resolveSeatClaim`, `getSeatAvailability`, `isLobbyFull`), and LiveKit message names |
+| `turnPrompt.js` | One-line "what to do now" prompt for each phase |
 | `pieces.js` | Player colors and visible piece inventory helpers |
 | `setupFlow.js` | Setup-order presentation helpers |
 | `resources.js` | Legacy/presentation starting-resource helpers |

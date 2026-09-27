@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import GameControlPanel from './components/game/GameControlPanel.jsx';
-import StartGameOverlay from './components/game/StartGameOverlay.jsx';
+import StartGameOverlay, { LOBBY_MODES } from './components/game/StartGameOverlay.jsx';
+import SettingsMenu from './components/game/SettingsMenu.jsx';
 import GameOverOverlay from './components/game/GameOverOverlay.jsx';
 import { createRandomBoard } from './game/board.js';
 import { getBotAction, getBotDelay } from './game/bots.js';
 import { createToastsFromLog, MAX_TOASTS } from './game/toasts.js';
+import { getTurnPrompt } from './game/turnPrompt.js';
 import { getActivePlayers } from './game/pieces.js';
 import {
   actionForTarget,
@@ -31,6 +33,8 @@ import {
   canParticipantRequestAction,
   claimSeat,
   createLobbyState,
+  isLobbyFull,
+  resolveSeatClaim,
   getParticipantPlayerId,
   getParticipantRole,
   markParticipantConnected,
@@ -38,6 +42,7 @@ import {
   MULTIPLAYER_MESSAGE_TYPES,
   releaseSeat,
   ROOM_STATUS,
+  getSeatAvailability,
   setLobbyPlayerCount,
   startLobbyGame,
 } from './game/multiplayerRoom.js';
@@ -50,6 +55,16 @@ const DATA_TOPIC = 'catan-game';
 const HOST_HEARTBEAT_MS = 5000;
 const HOST_TIMEOUT_MS = 16000;
 const SIMULATOR_STEP_MS = 650;
+const HELLO_RETRY_MS = 3000;
+
+function describeClaimRejection(result, lobbyState) {
+  const label = lobbyState?.seats.find((seat) => seat.playerId === result.playerId)?.label ?? 'That color';
+  if (result.reason === 'taken') {
+    return `${label} was just taken${result.takenBy ? ` by ${result.takenBy}` : ''}. Pick another color.`;
+  }
+  if (result.reason === 'started') return 'The game already started.';
+  return 'That color is not available. Pick another color.';
+}
 
 function rollDie() {
   return 1 + Math.floor(Math.random() * 6);
@@ -111,6 +126,14 @@ function App() {
   const [queuedBotOffer, setQueuedBotOffer] = useState(null);
   const [toasts, setToasts] = useState([]);
   const toastLogLengthRef = useRef(0);
+  // Join flow: a guest's color request waits for the host's answer.
+  const [pendingClaim, setPendingClaim] = useState(null);
+  const [claimNotice, setClaimNotice] = useState('');
+  const [lobbyFull, setLobbyFull] = useState(false);
+  const [leaveSignal, setLeaveSignal] = useState(0);
+  // DEV test hooks: pretend to be connected to a room and record outgoing messages.
+  const simulatedConnectionRef = useRef(false);
+  const outboundLogRef = useRef([]);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -213,43 +236,29 @@ function App() {
       .map((tile) => tile.tileId) ?? [],
     [game?.lastProduction],
   );
-  const canRollDiceNow = Boolean(game?.phase === 'roll' && isViewerTurn);
 
+  const viewerMustDiscard = Boolean(
+    game?.phase === 'discard' && viewerId && game.pendingDiscards?.[viewerId] && !sharedDeviceMode,
+  );
   const playerMessage = useMemo(() => {
     if (!isLocalMode && lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
       return 'Host disconnected. The room is read-only until a new game is hosted.';
     }
-    if (!isLocalMode && !isLiveRoomConnected) return 'Join the table call to host or claim a player seat.';
-    if (!confirmedPlayers && isSoloBotMode) return 'Choose how many players (you plus bots) for the solo test game.';
-    if (!confirmedPlayers) return isLocalTestMode
-      ? 'Choose a player count for the local test game.'
-      : 'Host chooses a player count to start the room setup.';
-    if (!game && !canStartGame) return 'Waiting for all selected seats to be claimed.';
-    if (!game && isSoloBotMode) {
-      return `${confirmedPlayers} players selected (you + ${confirmedPlayers - 1} bots). Start the solo test game when ready.`;
-    }
-    if (!game) return isLocalTestMode
-      ? `${confirmedPlayers} players selected. Start the local test game when ready.`
-      : `${confirmedPlayers} players selected. Host can start the game.`;
-    if (isSoloBotMode && game.phase === 'discard' && game.pendingDiscards?.[soloHumanPlayerId]) {
-      return 'You must discard half your cards.';
-    }
-    if (!isViewerTurn) {
-      const botSuffix = botPlayerIds.has(currentPlayer?.id) ? ' (bot)' : '';
-      return `Waiting for ${currentPlayer?.label ?? 'the current player'}${botSuffix}.`;
-    }
-    if (game.phase === 'setup') {
-      return `${currentPlayer?.label ?? 'Current player'} places a ${game.setupSettlementId ? 'road' : 'settlement'}.`;
-    }
-    if (game.phase === 'roll') return `${currentPlayer?.label ?? 'Current player'} rolls the dice.`;
-    if (game.phase === 'robber') return `${currentPlayer?.label ?? 'Current player'} must move the robber.`;
-    if (game.phase === 'discard') return 'Players with more than seven cards must discard.';
-    if (game.phase === 'gameOver') return `${currentPlayer?.label ?? 'A player'} won the game.`;
-    if (game.phase === 'action') return `${currentPlayer?.label ?? 'Current player'} may build, trade, or end the turn.`;
-    return 'Game started.';
+    if (!game) return '';
+    const currentName = game.players.find((player) => player.id === game.currentPlayerId)?.name
+      ?? currentPlayer?.label ?? 'Current player';
+    return getTurnPrompt({
+      game,
+      currentPlayerName: currentName,
+      isViewerTurn,
+      sharedDevice: isLocalTestMode,
+      requestedMode,
+      viewerMustDiscard,
+      robberTileSelected: Boolean(selectedRobberTileId),
+    });
   }, [
-    botPlayerIds, canStartGame, confirmedPlayers, currentPlayer, game, isLiveRoomConnected, isLocalMode,
-    isLocalTestMode, isSoloBotMode, isViewerTurn, lobbyState?.room.status, soloHumanPlayerId,
+    currentPlayer, game, isLocalMode, isLocalTestMode, isViewerTurn, lobbyState?.room.status,
+    requestedMode, selectedRobberTileId, viewerMustDiscard,
   ]);
 
   const legalTargets = useMemo(
@@ -270,13 +279,15 @@ function App() {
 
   const sendRoomMessage = useCallback((type, payload = {}, participant = localParticipant) => {
     if (!participant?.connected) return;
-    setOutboundMessage({
+    const message = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       topic: DATA_TOPIC,
       type,
       from: participant.participantId,
       payload,
-    });
+    };
+    if (import.meta.env.DEV) outboundLogRef.current = [...outboundLogRef.current, message].slice(-50);
+    setOutboundMessage(message);
   }, [localParticipant]);
 
   const broadcastLobbyState = useCallback((nextLobbyState) => {
@@ -391,23 +402,22 @@ function App() {
     setActionFeedback({ status: 'idle', message });
   }
 
-  function handleConfirm(event) {
-    event.preventDefault();
-    if (!isHost) {
-      setGameError('Only the room host can set the player count.');
-      setActionFeedback({ status: 'error', message: 'Only the room host can set the player count.' });
+  function handleSelectPlayerCount(count) {
+    setSelectedPlayers(count);
+    if (isLocalMode) {
+      setConfirmedPlayers(count);
+      setGame(null);
       return;
     }
-    setConfirmedPlayers(selectedPlayers);
+    if (!isHost || !lobbyState) return;
+    setConfirmedPlayers(count);
     setGame(null);
-    if (lobbyState) {
-      setLobbyState((current) => {
-        if (!current) return current;
-        const next = setLobbyPlayerCount(current, getActivePlayers(selectedPlayers), selectedPlayers);
-        broadcastLobbyState(next);
-        return next;
-      });
-    }
+    setLobbyState((current) => {
+      if (!current) return current;
+      const next = setLobbyPlayerCount(current, getActivePlayers(count), count);
+      broadcastLobbyState(next);
+      return next;
+    });
     resetTransientState();
   }
 
@@ -441,6 +451,39 @@ function App() {
     resetTransientState('Solo test mode off.');
   }
 
+  function createGameFor(players, solo) {
+    return createGame({
+      board: createRulesBoard(board, topology, ports),
+      players: players.map((player) => ({
+        ...player,
+        name: solo && player.id !== players[0].id ? `${player.label} (bot)` : player.label,
+      })),
+    });
+  }
+
+  // Settings gear: turn bots on and start straight away.
+  function handleStartSoloGame() {
+    const count = selectedPlayers;
+    setSoloBotMode(true);
+    setLocalTestMode(false);
+    setSimulateOpponents(false);
+    setLocalParticipant(null);
+    setLobbyState(null);
+    setLobbyFull(false);
+    setConfirmedPlayers(count);
+    setGame(createGameFor(getActivePlayers(count), true));
+    resetTransientState('Solo game started.');
+  }
+
+  function handleToggleBots(enabled) {
+    if (enabled) {
+      if (!isSoloBotMode) handleEnableSoloBotMode();
+      return;
+    }
+    if (game && !window.confirm('Turn bots off? This ends the solo game.')) return;
+    handleExitSoloBotMode();
+  }
+
   function handleStartGame() {
     if (!confirmedPlayers) return;
     if (game ? !isHost : !canStartGame) {
@@ -455,14 +498,7 @@ function App() {
       return;
     }
 
-    const players = getActivePlayers(confirmedPlayers);
-    const nextGame = createGame({
-      board: createRulesBoard(board, topology, ports),
-      players: players.map((player) => ({
-        ...player,
-        name: isSoloBotMode && player.id !== players[0].id ? `${player.label} (bot)` : player.label,
-      })),
-    });
+    const nextGame = createGameFor(getActivePlayers(confirmedPlayers), isSoloBotMode);
     const nextLobbyState = lobbyState ? startLobbyGame(lobbyState) : lobbyState;
     setGame(nextGame);
     if (nextLobbyState) setLobbyState(nextLobbyState);
@@ -537,18 +573,25 @@ function App() {
 
   const handleClaimSeat = useCallback((playerId) => {
     if (!localParticipant?.connected || !lobbyState || lobbyState.room.status !== ROOM_STATUS.LOBBY) return;
+    setClaimNotice('');
 
     if (isHost) {
-      const next = claimSeat(lobbyState, {
+      const { lobbyState: next, result } = resolveSeatClaim(lobbyState, {
         playerId,
         participantId: localParticipant.participantId,
         displayName: localParticipant.displayName,
       });
+      if (!result.ok) {
+        setClaimNotice(describeClaimRejection(result, lobbyState));
+        return;
+      }
       setLobbyState(next);
       broadcastLobbyState(next);
       return;
     }
 
+    // Guests only request a color; the host is authoritative and answers with CLAIM_RESULT.
+    setPendingClaim({ playerId, at: Date.now() });
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.CLAIM_SEAT, {
       playerId,
       participantId: localParticipant.participantId,
@@ -557,6 +600,7 @@ function App() {
   }, [broadcastLobbyState, isHost, lobbyState, localParticipant, sendRoomMessage]);
 
   const handleLocalParticipantChange = useCallback((participant) => {
+    if (simulatedConnectionRef.current) return;
     setLocalParticipant((current) => {
       if (
         current?.connected === participant.connected &&
@@ -581,8 +625,9 @@ function App() {
           players: activePlayers,
           playerCount: selectedPlayers,
         });
+        // The host starts on the first color and can switch in the lobby.
         return claimSeat(initial, {
-          playerId: participant.playerId,
+          playerId: participant.playerId ?? activePlayers[0]?.id,
           participantId: participant.participantId,
           displayName: participant.displayName,
         });
@@ -591,15 +636,10 @@ function App() {
       return;
     }
 
+    // Guests announce themselves and then pick a color in the lobby; no seat is claimed yet.
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.HELLO, {
       participantId: participant.participantId,
       displayName: participant.displayName,
-      playerId: participant.playerId,
-    }, participant);
-    sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.CLAIM_SEAT, {
-      participantId: participant.participantId,
-      displayName: participant.displayName,
-      playerId: participant.playerId,
     }, participant);
   }, [activePlayers, selectedPlayers, sendRoomMessage]);
 
@@ -660,7 +700,21 @@ function App() {
       return;
     }
 
+    if (message.type === MULTIPLAYER_MESSAGE_TYPES.CLAIM_RESULT && !isHost) {
+      if (payload.to && payload.to !== localParticipant?.participantId) return;
+      setPendingClaim(null);
+      if (payload.ok) {
+        setClaimNotice('');
+      } else if (payload.reason === 'full') {
+        setLobbyFull(true);
+      } else {
+        setClaimNotice(describeClaimRejection(payload, lobbyState));
+      }
+      return;
+    }
+
     if (message.type === MULTIPLAYER_MESSAGE_TYPES.ACTION_REJECTED && !isHost) {
+      if (payload.to && payload.to !== localParticipant?.participantId) return;
       setGameError(payload.error || 'Action rejected by host.');
       setActionFeedback({ status: 'error', message: payload.error || 'Action rejected by host.' });
       return;
@@ -680,13 +734,18 @@ function App() {
     }
 
     if (message.type === MULTIPLAYER_MESSAGE_TYPES.CLAIM_SEAT) {
-      const next = claimSeat(lobbyState, {
+      // Claims are applied in arrival order, so the first of two racing claims wins.
+      const participantId = sender.participantId || payload.participantId;
+      const { lobbyState: next, result } = resolveSeatClaim(lobbyState, {
         playerId: payload.playerId,
-        participantId: payload.participantId || sender.participantId,
+        participantId,
         displayName: payload.displayName || sender.displayName,
       });
-      setLobbyState(next);
-      broadcastLobbyState(next);
+      if (result.ok) {
+        setLobbyState(next);
+        broadcastLobbyState(next);
+      }
+      sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.CLAIM_RESULT, { to: participantId, ...result });
       return;
     }
 
@@ -722,8 +781,75 @@ function App() {
     game,
     isHost,
     lobbyState,
+    localParticipant?.participantId,
     sendRoomMessage,
   ]);
+
+  // Host: publish the lobby as soon as it connects, for guests who arrived first.
+  const hostAnnouncedRef = useRef(false);
+  useEffect(() => {
+    if (!isHost || !isLiveRoomConnected || !lobbyState || isLocalMode) {
+      hostAnnouncedRef.current = false;
+      return;
+    }
+    if (hostAnnouncedRef.current) return;
+    hostAnnouncedRef.current = true;
+    broadcastLobbyState(lobbyState);
+  }, [broadcastLobbyState, isHost, isLiveRoomConnected, isLocalMode, lobbyState]);
+
+  // Guest: keep saying hello until the host's lobby arrives.
+  useEffect(() => {
+    if (isHost || isLocalMode || !isLiveRoomConnected || lobbyState) return undefined;
+    const interval = window.setInterval(() => {
+      sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.HELLO, {
+        participantId: localParticipant?.participantId,
+        displayName: localParticipant?.displayName,
+      });
+    }, HELLO_RETRY_MS);
+    return () => window.clearInterval(interval);
+  }, [isHost, isLiveRoomConnected, isLocalMode, lobbyState, localParticipant, sendRoomMessage]);
+
+  // Guest: a full lobby means no color to pick, so leave the call and say so.
+  useEffect(() => {
+    if (isHost || isLocalMode || !isLiveRoomConnected || !lobbyState) return;
+    if (isLobbyFull(lobbyState, localParticipant?.participantId)) {
+      setLobbyFull(true);
+      setPendingClaim(null);
+    }
+  }, [isHost, isLiveRoomConnected, isLocalMode, lobbyState, localParticipant?.participantId]);
+
+  useEffect(() => {
+    if (!lobbyFull) return;
+    setLeaveSignal((value) => value + 1);
+    if (simulatedConnectionRef.current) {
+      setLocalParticipant((current) => (current ? { ...current, connected: false } : current));
+    }
+  }, [lobbyFull]);
+
+  // Guest: when the lobby shows the requested color went to someone else, ask to pick again.
+  useEffect(() => {
+    if (!pendingClaim || !lobbyState) return;
+    const seat = lobbyState.seats.find((item) => item.playerId === pendingClaim.playerId);
+    if (!seat) return;
+    if (seat.claimedBy === localParticipant?.participantId) {
+      setPendingClaim(null);
+      setClaimNotice('');
+    } else if (seat.claimedBy && seat.connected) {
+      setPendingClaim(null);
+      setClaimNotice(describeClaimRejection({
+        playerId: seat.playerId, reason: 'taken', takenBy: seat.displayName,
+      }, lobbyState));
+    }
+  }, [lobbyState, localParticipant?.participantId, pendingClaim]);
+
+  const handleRetryJoin = useCallback(() => {
+    setLobbyFull(false);
+    setLobbyState(null);
+    setClaimNotice('');
+    setPendingClaim(null);
+    simulatedConnectionRef.current = false;
+    setLocalParticipant((current) => (current ? { ...current, connected: false } : current));
+  }, []);
 
   useEffect(() => {
     if (!isHost || !isLiveRoomConnected) return undefined;
@@ -874,6 +1000,10 @@ function App() {
         toasts: toasts.map((toast) => toast.message),
         simulateOpponents,
         lobbyState,
+        lobbyFull,
+        pendingClaim,
+        claimNotice,
+        seatAvailability: getSeatAvailability(lobbyState, localParticipant?.participantId).map((seat) => ({ playerId: seat.playerId, status: seat.status })),
         resources: game
           ? Object.fromEntries(game.players.map((player) => [player.id, { ...player.resources }]))
           : null,
@@ -952,6 +1082,27 @@ function App() {
         });
       },
       queueBotTradeOffer: (give, receive) => setQueuedBotOffer({ give, receive }),
+      // Pretend this tab joined a LiveKit room (no network). Feed host messages
+      // with receiveMultiplayerMessage and inspect what we sent with getOutboundMessages.
+      simulateRoomConnection: ({ participantId, displayName = 'Tester', isRoomCreator = false, roomName = 'catan-table-test' }) => {
+        simulatedConnectionRef.current = true;
+        outboundLogRef.current = [];
+        setLobbyFull(false);
+        setLobbyState(null);
+        const participant = { connected: true, participantId, displayName, playerId: null, roomName, isRoomCreator };
+        setLocalParticipant(participant);
+        if (!isRoomCreator) {
+          sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.HELLO, { participantId, displayName }, participant);
+        }
+        if (isRoomCreator) {
+          const players = getActivePlayers(selectedPlayers);
+          setLobbyState(claimSeat(createLobbyState({
+            roomName, hostParticipantId: participantId, players, playerCount: selectedPlayers,
+          }), { playerId: players[0].id, participantId, displayName }));
+          setConfirmedPlayers(selectedPlayers);
+        }
+      },
+      getOutboundMessages: () => outboundLogRef.current.map((message) => ({ type: message.type, payload: message.payload })),
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -968,7 +1119,24 @@ function App() {
     placements.roads.length, placements.settlements.length, playerInventories, playerView,
     productionCandidates, requestOrDispatch, selectedRoadBuildingEdges, selectedRobberTileId,
     isSoloBotMode, simulateOpponents, toasts, topology, viewerId, viewerRole,
+    lobbyFull, pendingClaim, claimNotice, localParticipant?.participantId, selectedPlayers, sendRoomMessage,
   ]);
+
+  const viewerSeatConfirmed = getParticipantPlayerId(lobbyState, localParticipant?.participantId);
+  const seatAssignments = useMemo(() => Object.fromEntries(
+    (lobbyState?.seats ?? []).filter((seat) => seat.claimedBy).map((seat) => [seat.playerId, seat.claimedBy]),
+  ), [lobbyState]);
+  const inviteUrl = localParticipant?.roomName
+    ? `${window.location.origin}${window.location.pathname}?room=${localParticipant.roomName}`
+    : window.location.href;
+  let lobbyMode = null;
+  if (isLocalTestMode) lobbyMode = LOBBY_MODES.LOCAL_TEST;
+  else if (isSoloBotMode) lobbyMode = LOBBY_MODES.SOLO;
+  else if (lobbyFull) lobbyMode = LOBBY_MODES.FULL;
+  else if (!isLiveRoomConnected) lobbyMode = null; // the name/join card is shown instead
+  else if (isHost) lobbyMode = LOBBY_MODES.HOST;
+  else if (!lobbyState || lobbyState.room.status !== ROOM_STATUS.LOBBY) lobbyMode = LOBBY_MODES.WAITING;
+  else lobbyMode = LOBBY_MODES.GUEST;
 
   return (
     <main className="app-shell">
@@ -993,44 +1161,31 @@ function App() {
         {!isLocalMode && <LiveKitTableCall
           players={activePlayers}
           playerStats={playerStats}
-          claimedPlayerIds={lobbyState?.seats.filter((seat) => seat.claimedBy).map((seat) => seat.playerId) ?? []}
+          seatAssignments={seatAssignments}
+          publishMedia={Boolean(viewerSeatConfirmed)}
+          leaveSignal={leaveSignal}
+          hideJoin={lobbyFull || simulatedConnectionRef.current}
           outboundMessage={outboundMessage}
           onDataMessage={handleDataMessage}
           onLocalParticipantChange={handleLocalParticipantChange}
           onParticipantPresenceChange={handleParticipantPresenceChange}
         />}
-        {canRollDiceNow && (
-          <div className="turn-dice-overlay" role="status" aria-live="polite">
-            <div className="turn-dice-card">
-              <p className="status-label">Your Turn</p>
-              <div className="turn-dice-pair" aria-hidden="true">
-                <span>?</span>
-                <span>?</span>
-              </div>
-              <button type="button" data-testid="roll-dice-overlay" onClick={handleRollDice}>
-                Roll Dice
-              </button>
-            </div>
-          </div>
-        )}
         {!game && (
           <StartGameOverlay
-            selectedPlayers={selectedPlayers}
-            confirmedPlayers={confirmedPlayers}
-            onSelectPlayers={setSelectedPlayers}
-            onConfirm={handleConfirm}
+            mode={lobbyMode}
+            playerCount={activePlayerCount}
+            onSelectPlayerCount={handleSelectPlayerCount}
             onStart={handleStartGame}
-            onClaimSeat={handleClaimSeat}
-            lobbyState={lobbyState}
-            localParticipant={localParticipant}
-            viewerRole={viewerRole}
-            isHost={isHost}
             canStartGame={canStartGame}
-            localTestMode={isLocalTestMode}
-            soloBotMode={isSoloBotMode}
-            onEnableSoloBotMode={handleEnableSoloBotMode}
-            onExitSoloBotMode={handleExitSoloBotMode}
-            onEnableLocalTestMode={import.meta.env.DEV ? handleEnableLocalTestMode : null}
+            lobbyState={lobbyState}
+            participantId={localParticipant?.participantId ?? null}
+            pendingClaim={pendingClaim}
+            claimNotice={claimNotice}
+            onClaimSeat={handleClaimSeat}
+            inviteUrl={inviteUrl}
+            onExitSolo={handleExitSoloBotMode}
+            onRetryJoin={handleRetryJoin}
+            newGameUrl={window.location.pathname}
           />
         )}
         <GameOverOverlay playerView={playerView} onRestart={handleRestartGame} onNewGame={handleNewGame} />
@@ -1087,9 +1242,33 @@ function App() {
           simulateOpponents={simulateOpponents}
           onToggleSimulation={setSimulateOpponents}
           onLoadTestBoard={handleLoadTestBoard}
-          onRollChosenDice={handleChosenDice}
           toasts={toasts}
           onDismissToast={dismissToast}
+        />
+        <SettingsMenu
+          game={game}
+          canUseBots={!isLiveRoomConnected || isLocalMode}
+          botsEnabled={isSoloBotMode}
+          onToggleBots={handleToggleBots}
+          soloPlayerCount={selectedPlayers}
+          onSelectSoloPlayerCount={(count) => {
+            setSelectedPlayers(count);
+            if (isLocalMode && !game) setConfirmedPlayers(count);
+          }}
+          onStartSolo={handleStartSoloGame}
+          onResetCamera={() => setCameraResetKey((key) => key + 1)}
+          canRestart={isHost}
+          onRestartGame={handleRestartGame}
+          localTestMode={isLocalTestMode}
+          onEnableLocalTestMode={import.meta.env.DEV ? handleEnableLocalTestMode : null}
+          devTools={import.meta.env.DEV ? {
+            game,
+            boardSeed: board.seed,
+            simulateOpponents,
+            onToggleSimulation: setSimulateOpponents,
+            onLoadBoard: handleLoadTestBoard,
+            onRollDice: handleChosenDice,
+          } : null}
         />
       </section>
 

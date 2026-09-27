@@ -14,7 +14,7 @@ flowchart LR
 ```
 
 - `netlify.toml` runs `npm run build`, publishes `dist/`, and registers `netlify/functions`.
-- `functions/livekit-token.js` validates room/participant metadata and signs short-lived LiveKit JWTs using `jose`.
+- `functions/livekit-token.js` validates room/participant metadata and signs short-lived LiveKit JWTs using `jose`. `playerId` is optional because colors are now claimed in the lobby after connecting.
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` remain server-side.
 - The function returns a LiveKit URL and participant token; it does not join the room itself.
 

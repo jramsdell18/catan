@@ -41,6 +41,9 @@ function DevelopmentControls({
   // While free roads are being picked on the board, the sheet steps aside.
   const roadBuildingActive = interactionMode === INTERACTION_MODES.ROAD_BUILDING;
 
+  // Only show the cards button when there is something to do with it.
+  if (!open && !roadBuildingActive && cards.length === 0 && !canBuy) return null;
+
   function canPlay(card) {
     return card.type !== 'victoryPoint'
       && card.boughtTurn !== game.turnIndex
@@ -51,7 +54,7 @@ function DevelopmentControls({
     <>
       <button
         type="button"
-        className={`hud-icon-button development-toggle${open ? ' selected' : ''}`}
+        className={`hud-icon-button hud-labeled development-toggle${open ? ' selected' : ''}`}
         onClick={() => setOpen((value) => !value)}
         aria-label={`Development cards (${cards.length})`}
         aria-expanded={open}
@@ -59,6 +62,7 @@ function DevelopmentControls({
         data-testid="toggle-development"
       >
         <CardsIcon />
+        <span className="hud-caption" aria-hidden="true">Cards</span>
         {cards.length > 0 && <span className="hud-badge" aria-hidden="true">{cards.length}</span>}
       </button>
       {roadBuildingActive && (
