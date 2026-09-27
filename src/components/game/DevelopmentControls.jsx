@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BUILDING_COSTS, RESOURCE_TYPES } from '../../rules/index.js';
-import { canAfford, formatCost } from '../../game/interactions.js';
+import { canAfford, formatCost, INTERACTION_MODES } from '../../game/interactions.js';
+import { CardsIcon } from './HudIcons.jsx';
 
 const CARD_LABELS = {
   knight: 'Knight',
@@ -18,6 +19,7 @@ function DevelopmentControls({
   selectedRoadCount,
   onFinishRoadBuilding,
   onCancelRoadBuilding,
+  interactionMode = null,
 }) {
   const [open, setOpen] = useState(false);
   const [plentyResources, setPlentyResources] = useState(['wood', 'brick']);
@@ -36,6 +38,9 @@ function DevelopmentControls({
     && deckCount > 0
     && canAfford(privatePlayer.resources, BUILDING_COSTS.development);
 
+  // While free roads are being picked on the board, the sheet steps aside.
+  const roadBuildingActive = interactionMode === INTERACTION_MODES.ROAD_BUILDING;
+
   function canPlay(card) {
     return card.type !== 'victoryPoint'
       && card.boughtTurn !== game.turnIndex
@@ -43,13 +48,36 @@ function DevelopmentControls({
   }
 
   return (
-    <section className="development-panel" aria-labelledby="development-title" data-testid="development-controls">
-      <button type="button" className="secondary-button development-toggle" onClick={() => setOpen((value) => !value)} data-testid="toggle-development">
-        {open ? 'Hide development cards' : `Development cards (${cards.length})`}
+    <>
+      <button
+        type="button"
+        className={`hud-icon-button development-toggle${open ? ' selected' : ''}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-label={`Development cards (${cards.length})`}
+        aria-expanded={open}
+        title="Development cards"
+        data-testid="toggle-development"
+      >
+        <CardsIcon />
+        {cards.length > 0 && <span className="hud-badge" aria-hidden="true">{cards.length}</span>}
       </button>
-      {open && (
-        <div className="development-content">
-          <p className="status-label" id="development-title">Development cards</p>
+      {roadBuildingActive && (
+        <div className="road-building-progress hud-card" data-testid="road-building-progress">
+          <strong>{selectedRoadCount}/2 free roads selected</strong>
+          {selectedRoadCount > 0 && (
+            <button type="button" onClick={onFinishRoadBuilding}>Build selected road{selectedRoadCount === 1 ? '' : 's'}</button>
+          )}
+          <button type="button" className="secondary-button" onClick={onCancelRoadBuilding}>Cancel</button>
+        </div>
+      )}
+      {open && !roadBuildingActive && (
+        <div className="board-sheet-backdrop">
+        <section className="board-sheet development-panel" role="dialog" aria-modal="true" aria-labelledby="development-title" data-testid="development-controls">
+          <header className="board-sheet-header">
+            <h2 id="development-title">Development cards</h2>
+            <button type="button" className="sheet-close" onClick={() => setOpen(false)} aria-label="Close development cards" data-testid="close-development">×</button>
+          </header>
+          <div className="board-sheet-body development-content">
           <button
             type="button"
             onClick={() => onAction({ type: 'buyDevelopment', playerId: game.currentPlayerId })}
@@ -96,16 +124,11 @@ function DevelopmentControls({
               );
             })}
           </div>
-          {selectedRoadCount > 0 && (
-            <div className="road-building-progress" data-testid="road-building-progress">
-              <strong>{selectedRoadCount}/2 free roads selected</strong>
-              <button type="button" onClick={onFinishRoadBuilding}>Build selected road{selectedRoadCount === 1 ? '' : 's'}</button>
-              <button type="button" className="secondary-button" onClick={onCancelRoadBuilding}>Cancel</button>
-            </div>
-          )}
+          </div>
+        </section>
         </div>
       )}
-    </section>
+    </>
   );
 }
 

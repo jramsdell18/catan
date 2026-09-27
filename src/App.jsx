@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import GameControlPanel from './components/game/GameControlPanel.jsx';
 import StartGameOverlay from './components/game/StartGameOverlay.jsx';
 import GameOverOverlay from './components/game/GameOverOverlay.jsx';
 import { createRandomBoard } from './game/board.js';
+import { getBotAction, getBotDelay } from './game/bots.js';
+import { createToastsFromLog, MAX_TOASTS } from './game/toasts.js';
 import { getActivePlayers } from './game/pieces.js';
 import {
   actionForTarget,
@@ -40,7 +42,6 @@ import {
   startLobbyGame,
 } from './game/multiplayerRoom.js';
 import { createBoardTopology } from './game/topology.js';
-import { RESOURCE_TYPES } from './rules/constants.js';
 import { applyAction, createGame, getPlayerView, TERRAIN_RESOURCE } from './rules/index.js';
 import LiveKitTableCall from './stream/LiveKitTableCall.jsx';
 
@@ -63,46 +64,20 @@ function areDiceEqual(left, right) {
   );
 }
 
-function randomItem(items) {
-  if (!items.length) return null;
-  return items[Math.floor(Math.random() * items.length)];
-}
-
 function hasResources(resources, cost) {
   return Object.entries(cost).every(([resource, amount]) => (resources?.[resource] ?? 0) >= amount);
-}
-
-function createRandomDiscard(resources, amount) {
-  const cards = RESOURCE_TYPES.flatMap((resource) => Array(resources[resource] ?? 0).fill(resource));
-  const discard = Object.fromEntries(RESOURCE_TYPES.map((resource) => [resource, 0]));
-
-  for (let index = 0; index < amount && cards.length > 0; index += 1) {
-    const cardIndex = Math.floor(Math.random() * cards.length);
-    const [resource] = cards.splice(cardIndex, 1);
-    discard[resource] += 1;
-  }
-
-  return discard;
 }
 
 function getSimulatedTradeAcceptance(game, simulatedPlayerIds) {
   const offer = game?.tradeOffer;
   if (!offer || game.phase !== 'action') return null;
 
-  return game.players
+  const acceptor = game.players
     .filter((player) => simulatedPlayerIds.has(player.id))
     .filter((player) => player.id !== offer.fromPlayerId)
-    .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
-    .find((player) => hasResources(player.resources, offer.receive))
-    ? {
-        type: 'acceptTrade',
-        playerId: game.players
-          .filter((player) => simulatedPlayerIds.has(player.id))
-          .filter((player) => player.id !== offer.fromPlayerId)
-          .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
-          .find((player) => hasResources(player.resources, offer.receive)).id,
-      }
-    : null;
+    .filter((player) => offer.toPlayerIds?.includes(player.id) && offer.responses?.[player.id] !== 'declined')
+    .find((player) => hasResources(player.resources, offer.receive));
+  return acceptor ? { type: 'acceptTrade', playerId: acceptor.id } : null;
 }
 
 function getSimulationAction({ game, topology, board, simulatedPlayerIds }) {
@@ -111,50 +86,7 @@ function getSimulationAction({ game, topology, board, simulatedPlayerIds }) {
   const tradeAction = getSimulatedTradeAcceptance(game, simulatedPlayerIds);
   if (tradeAction) return tradeAction;
 
-  if (game.phase === 'discard') {
-    const discarder = game.players.find((player) =>
-      simulatedPlayerIds.has(player.id) && game.pendingDiscards?.[player.id],
-    );
-    if (!discarder) return null;
-    return {
-      type: 'discard',
-      playerId: discarder.id,
-      resources: createRandomDiscard(discarder.resources, game.pendingDiscards[discarder.id]),
-    };
-  }
-
-  if (!simulatedPlayerIds.has(game.currentPlayerId)) return null;
-
-  if (game.phase === 'setup') {
-    const mode = getInteractionMode(game);
-    const targets = getLegalTargets(game, topology, board, mode);
-    const target = mode === INTERACTION_MODES.PLACE_ROAD
-      ? randomItem(targets.edges)
-      : randomItem(targets.intersections);
-    return target ? actionForTarget(mode, game, target.id) : null;
-  }
-
-  if (game.phase === 'roll') {
-    return { type: 'rollDice', playerId: game.currentPlayerId, dice: [rollDie(), rollDie()] };
-  }
-
-  if (game.phase === 'robber') {
-    const hex = randomItem(board.hexes.filter((item) => item.hexId !== game.board.robberTileId));
-    if (!hex) return null;
-    const victim = randomItem(getEligibleRobberVictims(game, hex.hexId));
-    return {
-      type: 'moveRobber',
-      playerId: game.currentPlayerId,
-      tileId: hex.hexId,
-      victimId: victim?.id,
-    };
-  }
-
-  if (game.phase === 'action') {
-    return { type: 'endTurn', playerId: game.currentPlayerId };
-  }
-
-  return null;
+  return getBotAction({ game, topology, board, botPlayerIds: simulatedPlayerIds });
 }
 
 function App() {
@@ -175,6 +107,10 @@ function App() {
   const [selectedRoadBuildingEdges, setSelectedRoadBuildingEdges] = useState([]);
   const [localTestMode, setLocalTestMode] = useState(false);
   const [simulateOpponents, setSimulateOpponents] = useState(false);
+  const [soloBotMode, setSoloBotMode] = useState(false);
+  const [queuedBotOffer, setQueuedBotOffer] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const toastLogLengthRef = useRef(0);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -183,14 +119,25 @@ function App() {
   const placements = useMemo(() => placementsFromGame(game), [game]);
   const currentPlayer = activePlayers.find((player) => player.id === game?.currentPlayerId) ?? null;
   const isLocalTestMode = import.meta.env.DEV && localTestMode;
+  // Solo bot mode is available in every build: one human (seat 1) plays against
+  // test-only bots, and the rules run in this browser like local test mode.
+  const isSoloBotMode = soloBotMode;
+  const isLocalMode = isLocalTestMode || isSoloBotMode;
+  const soloHumanPlayerId = isSoloBotMode ? activePlayers[0]?.id ?? null : null;
+  const botPlayerIds = useMemo(
+    () => new Set(isSoloBotMode ? activePlayers.slice(1).map((player) => player.id) : []),
+    [activePlayers, isSoloBotMode],
+  );
   const isLiveRoomConnected = Boolean(localParticipant?.connected);
   const isHost = Boolean(
-    isLocalTestMode || (
+    isLocalMode || (
       isLiveRoomConnected &&
         lobbyState?.room.hostParticipantId === localParticipant?.participantId
     ),
   );
-  const viewerId = isLocalTestMode
+  const viewerId = isSoloBotMode
+    ? soloHumanPlayerId
+    : isLocalTestMode
     ? game?.currentPlayerId ?? null
     : getParticipantPlayerId(lobbyState, localParticipant?.participantId);
   const simulatorHumanPlayerId = isLocalTestMode
@@ -200,19 +147,22 @@ function App() {
     () => new Set(activePlayers.map((player) => player.id).filter((playerId) => playerId !== simulatorHumanPlayerId)),
     [activePlayers, simulatorHumanPlayerId],
   );
-  const viewerRole = isLocalTestMode
+  const viewerRole = isLocalMode
     ? 'host'
     : getParticipantRole(lobbyState, localParticipant?.participantId);
-  const isViewerTurn = isLocalTestMode
+  const isViewerTurn = isSoloBotMode
+    ? Boolean(game && game.currentPlayerId === soloHumanPlayerId)
+    : isLocalTestMode
     ? Boolean(game)
     : canParticipantAct({ lobbyState, participantId: localParticipant?.participantId, game });
-  const canStartGame = isLocalTestMode
+  const canStartGame = isLocalMode
     ? Boolean(confirmedPlayers)
     : canHostStart(lobbyState, localParticipant?.participantId);
   const playerView = usePlayerView(game, viewerId);
   // Local single-browser play keeps shared-device discard/trade UX.
   // Live multiplayer rooms always use seat-scoped privacy.
-  const sharedDeviceMode = isLocalTestMode || !isLiveRoomConnected;
+  // Solo bot mode keeps the human's hand private from the bot seats.
+  const sharedDeviceMode = isLocalTestMode || (!isSoloBotMode && !isLiveRoomConnected);
   const resourceHands = useMemo(
     () => resourceHandsFromGame(game, activePlayers, playerView),
     [activePlayers, game, playerView],
@@ -266,19 +216,27 @@ function App() {
   const canRollDiceNow = Boolean(game?.phase === 'roll' && isViewerTurn);
 
   const playerMessage = useMemo(() => {
-    if (!isLocalTestMode && lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
+    if (!isLocalMode && lobbyState?.room.status === ROOM_STATUS.HOST_DISCONNECTED) {
       return 'Host disconnected. The room is read-only until a new game is hosted.';
     }
-    if (!isLocalTestMode && !isLiveRoomConnected) return 'Join the table call to host or claim a player seat.';
+    if (!isLocalMode && !isLiveRoomConnected) return 'Join the table call to host or claim a player seat.';
+    if (!confirmedPlayers && isSoloBotMode) return 'Choose how many players (you plus bots) for the solo test game.';
     if (!confirmedPlayers) return isLocalTestMode
       ? 'Choose a player count for the local test game.'
       : 'Host chooses a player count to start the room setup.';
     if (!game && !canStartGame) return 'Waiting for all selected seats to be claimed.';
+    if (!game && isSoloBotMode) {
+      return `${confirmedPlayers} players selected (you + ${confirmedPlayers - 1} bots). Start the solo test game when ready.`;
+    }
     if (!game) return isLocalTestMode
       ? `${confirmedPlayers} players selected. Start the local test game when ready.`
       : `${confirmedPlayers} players selected. Host can start the game.`;
+    if (isSoloBotMode && game.phase === 'discard' && game.pendingDiscards?.[soloHumanPlayerId]) {
+      return 'You must discard half your cards.';
+    }
     if (!isViewerTurn) {
-      return `Waiting for ${currentPlayer?.label ?? 'the current player'}.`;
+      const botSuffix = botPlayerIds.has(currentPlayer?.id) ? ' (bot)' : '';
+      return `Waiting for ${currentPlayer?.label ?? 'the current player'}${botSuffix}.`;
     }
     if (game.phase === 'setup') {
       return `${currentPlayer?.label ?? 'Current player'} places a ${game.setupSettlementId ? 'road' : 'settlement'}.`;
@@ -289,7 +247,10 @@ function App() {
     if (game.phase === 'gameOver') return `${currentPlayer?.label ?? 'A player'} won the game.`;
     if (game.phase === 'action') return `${currentPlayer?.label ?? 'Current player'} may build, trade, or end the turn.`;
     return 'Game started.';
-  }, [canStartGame, confirmedPlayers, currentPlayer, game, isLiveRoomConnected, isLocalTestMode, isViewerTurn, lobbyState?.room.status]);
+  }, [
+    botPlayerIds, canStartGame, confirmedPlayers, currentPlayer, game, isLiveRoomConnected, isLocalMode,
+    isLocalTestMode, isSoloBotMode, isViewerTurn, lobbyState?.room.status, soloHumanPlayerId,
+  ]);
 
   const legalTargets = useMemo(
     () => {
@@ -348,7 +309,12 @@ function App() {
       try {
         const next = applyAction(current, action);
         setGameError('');
-        setActionFeedback({ status: 'success', message: `Success: ${describeAction(action.type)}.` });
+        setActionFeedback({
+          status: 'success',
+          message: options.actorLabel
+            ? `${options.actorLabel} ${describeAction(action.type)}.`
+            : `Success: ${describeAction(action.type)}.`,
+        });
         setRequestedMode(null);
         if (action.type === 'moveRobber') setSelectedRobberTileId(null);
         if (action.type === 'playDevelopment') setSelectedRoadBuildingEdges([]);
@@ -366,13 +332,18 @@ function App() {
   }, [animateDice, broadcastGameSnapshot]);
 
   const requestOrDispatch = useCallback((action) => {
-    if (!isViewerTurn) {
+    // In solo bot mode the human may discard while a bot's roll is being resolved.
+    const isSoloDiscard = isSoloBotMode && action.type === 'discard' && action.playerId === soloHumanPlayerId;
+    // Trade recipients answer offers on their own screen, outside their turn.
+    const isTradeResponse = (action.type === 'acceptTrade' || action.type === 'rejectTrade') &&
+      action.playerId === viewerId && Boolean(game?.tradeOffer?.toPlayerIds?.includes(viewerId));
+    if (!isViewerTurn && !isSoloDiscard && !isTradeResponse) {
       setGameError('It is not your turn.');
       setActionFeedback({ status: 'error', message: 'It is not your turn.' });
       return;
     }
 
-    if (isLocalTestMode) {
+    if (isLocalMode) {
       dispatchLocal(action);
       return;
     }
@@ -390,7 +361,10 @@ function App() {
 
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.ACTION_REQUEST, { action });
     setActionFeedback({ status: 'pending', message: `Requested: ${describeAction(action.type)}.` });
-  }, [dispatchLocal, isHost, isLiveRoomConnected, isLocalTestMode, isViewerTurn, sendRoomMessage]);
+  }, [
+    dispatchLocal, game?.tradeOffer, isHost, isLiveRoomConnected, isLocalMode, isSoloBotMode, isViewerTurn,
+    sendRoomMessage, soloHumanPlayerId, viewerId,
+  ]);
 
   const cancelInteraction = useCallback(() => {
     setRequestedMode(null);
@@ -439,6 +413,7 @@ function App() {
 
   function handleEnableLocalTestMode() {
     if (!import.meta.env.DEV) return;
+    setSoloBotMode(false);
     setLocalTestMode(true);
     setLocalParticipant(null);
     setLobbyState(null);
@@ -446,6 +421,24 @@ function App() {
     setConfirmedPlayers(3);
     setGame(null);
     resetTransientState('Local test mode enabled.');
+  }
+
+  function handleEnableSoloBotMode() {
+    setSoloBotMode(true);
+    setLocalTestMode(false);
+    setSimulateOpponents(false);
+    setLocalParticipant(null);
+    setLobbyState(null);
+    setConfirmedPlayers(selectedPlayers);
+    setGame(null);
+    resetTransientState('Solo test mode: you play Red and the other seats are bots.');
+  }
+
+  function handleExitSoloBotMode() {
+    setSoloBotMode(false);
+    setConfirmedPlayers(null);
+    setGame(null);
+    resetTransientState('Solo test mode off.');
   }
 
   function handleStartGame() {
@@ -465,7 +458,10 @@ function App() {
     const players = getActivePlayers(confirmedPlayers);
     const nextGame = createGame({
       board: createRulesBoard(board, topology, ports),
-      players: players.map((player) => ({ ...player, name: player.label })),
+      players: players.map((player) => ({
+        ...player,
+        name: isSoloBotMode && player.id !== players[0].id ? `${player.label} (bot)` : player.label,
+      })),
     });
     const nextLobbyState = lobbyState ? startLobbyGame(lobbyState) : lobbyState;
     setGame(nextGame);
@@ -482,7 +478,7 @@ function App() {
   function handleNewGame() {
     if (game && !window.confirm('Start a new game? All progress will be lost.')) return;
     setGame(null);
-    setConfirmedPlayers(null);
+    setConfirmedPlayers(isSoloBotMode ? DEFAULT_PLAYER_COUNT : null);
     setSelectedPlayers(DEFAULT_PLAYER_COUNT);
     setBoard(createRandomBoard());
     resetTransientState('Choose players for a new game.');
@@ -753,8 +749,51 @@ function App() {
     return () => window.clearInterval(interval);
   }, [isHost, isLiveRoomConnected, lastHostHeartbeatAt, lobbyState]);
 
+  // Toasts come from new rules-log entries, so every client and every bot turn produces them.
   useEffect(() => {
-    if (!import.meta.env.DEV || !simulateOpponents || !game) return undefined;
+    const previous = toastLogLengthRef.current;
+    const length = game?.log.length ?? 0;
+    toastLogLengthRef.current = length;
+    const next = createToastsFromLog(game, previous);
+    if (next.length) setToasts((current) => [...current, ...next].slice(-MAX_TOASTS));
+  }, [game]);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (!isSoloBotMode || !game) return undefined;
+    // Dev test hook: a bot proposes a queued trade to the human during its action phase.
+    if (
+      queuedBotOffer && game.phase === 'action' && botPlayerIds.has(game.currentPlayerId) && !game.tradeOffer
+    ) {
+      const offerAction = {
+        type: 'offerTrade',
+        playerId: game.currentPlayerId,
+        toPlayerIds: [soloHumanPlayerId],
+        give: queuedBotOffer.give,
+        receive: queuedBotOffer.receive,
+      };
+      setQueuedBotOffer(null);
+      const actorLabel = game.players.find((player) => player.id === game.currentPlayerId)?.name;
+      dispatchLocal(offerAction, { actorLabel });
+      return undefined;
+    }
+    const action = getBotAction({ game, topology, board, botPlayerIds });
+    if (!action) return undefined;
+    const actorLabel = game.players.find((player) => player.id === action.playerId)?.name;
+
+    // A short pause lets the human see each bot move before the next one.
+    const timeout = window.setTimeout(() => {
+      dispatchLocal(action, { actorLabel });
+    }, getBotDelay());
+
+    return () => window.clearTimeout(timeout);
+  }, [board, botPlayerIds, dispatchLocal, game, isSoloBotMode, queuedBotOffer, soloHumanPlayerId, topology]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !simulateOpponents || !game || isSoloBotMode) return undefined;
     if (!isLocalTestMode && !isHost) return undefined;
 
     const action = getSimulationAction({
@@ -776,6 +815,7 @@ function App() {
     game,
     isHost,
     isLocalTestMode,
+    isSoloBotMode,
     simulateOpponents,
     simulatedPlayerIds,
     topology,
@@ -827,6 +867,11 @@ function App() {
         viewerRole,
         isViewerTurn,
         localTestMode: isLocalTestMode,
+        soloBotMode: isSoloBotMode,
+        botPlayerIds: [...botPlayerIds],
+        tradeOffer: game?.tradeOffer ?? null,
+        lastTrade: game?.lastTrade ?? null,
+        toasts: toasts.map((toast) => toast.message),
         simulateOpponents,
         lobbyState,
         resources: game
@@ -906,6 +951,7 @@ function App() {
           return next;
         });
       },
+      queueBotTradeOffer: (give, receive) => setQueuedBotOffer({ give, receive }),
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -915,13 +961,13 @@ function App() {
     };
     return () => { delete window.__CATAN_TEST_API; };
   }, [
-    actionFeedback, board.seed, buildAvailability, cancelInteraction, confirmedPlayers,
+    actionFeedback, board.seed, botPlayerIds, buildAvailability, cancelInteraction, confirmedPlayers,
     eligibleRobberVictims, game, gameError, handleDataMessage, handlePlaceRoad, handlePlaceSettlement,
     handleSelectTarget, interactionMode, isViewerTurn, legalTargets.hexes, lobbyState,
     placementOptions.roads, placementOptions.settlements, placements.cities.length,
     placements.roads.length, placements.settlements.length, playerInventories, playerView,
     productionCandidates, requestOrDispatch, selectedRoadBuildingEdges, selectedRobberTileId,
-    simulateOpponents, topology, viewerId, viewerRole,
+    isSoloBotMode, simulateOpponents, toasts, topology, viewerId, viewerRole,
   ]);
 
   return (
@@ -944,7 +990,7 @@ function App() {
           productionTileIds={productionTileIds}
           pendingRoadEdgeIds={selectedRoadBuildingEdges}
         />
-        {!isLocalTestMode && <LiveKitTableCall
+        {!isLocalMode && <LiveKitTableCall
           players={activePlayers}
           playerStats={playerStats}
           claimedPlayerIds={lobbyState?.seats.filter((seat) => seat.claimedBy).map((seat) => seat.playerId) ?? []}
@@ -981,67 +1027,72 @@ function App() {
             isHost={isHost}
             canStartGame={canStartGame}
             localTestMode={isLocalTestMode}
+            soloBotMode={isSoloBotMode}
+            onEnableSoloBotMode={handleEnableSoloBotMode}
+            onExitSoloBotMode={handleExitSoloBotMode}
             onEnableLocalTestMode={import.meta.env.DEV ? handleEnableLocalTestMode : null}
           />
         )}
         <GameOverOverlay playerView={playerView} onRestart={handleRestartGame} onNewGame={handleNewGame} />
+        <GameControlPanel
+          game={game}
+          playerView={playerView}
+          viewerId={viewerId}
+          sharedDeviceMode={sharedDeviceMode}
+          playerMessage={playerMessage}
+          diceTotal={diceTotal}
+          gameError={gameError}
+          interactionMode={interactionMode}
+          requestedMode={requestedMode}
+          onCancelInteraction={cancelInteraction}
+          actionFeedback={actionFeedback}
+          confirmedPlayers={confirmedPlayers}
+          buildAvailability={buildAvailability}
+          onRollDice={handleRollDice}
+          onEndTurn={() => game && requestOrDispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
+          onSelectMode={setRequestedMode}
+          onResetCamera={() => setCameraResetKey((key) => key + 1)}
+          onStartGame={game ? handleRestartGame : handleStartGame}
+          boardSeed={board.seed}
+          currentPlayer={currentPlayer}
+          selectedRobberTileId={selectedRobberTileId}
+          eligibleRobberVictims={eligibleRobberVictims}
+          onDiscard={(playerId, resources) => requestOrDispatch({ type: 'discard', playerId, resources })}
+          onSelectVictim={(victimId) => requestOrDispatch({
+            type: 'moveRobber',
+            playerId: game.currentPlayerId,
+            tileId: selectedRobberTileId,
+            victimId,
+          })}
+          onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
+          onTradeAction={requestOrDispatch}
+          viewerRole={viewerRole}
+          isViewerTurn={isViewerTurn}
+          isHost={isHost}
+          canStartGame={canStartGame}
+          lobbyState={lobbyState}
+          onDevelopmentAction={requestOrDispatch}
+          selectedRoadBuildingEdges={selectedRoadBuildingEdges}
+          onBeginRoadBuilding={() => {
+            setSelectedRoadBuildingEdges([]);
+            setRequestedMode(INTERACTION_MODES.ROAD_BUILDING);
+          }}
+          onFinishRoadBuilding={() => requestOrDispatch({
+            type: 'playDevelopment',
+            playerId: game.currentPlayerId,
+            card: 'roadBuilding',
+            edgeIds: selectedRoadBuildingEdges,
+          })}
+          onCancelRoadBuilding={cancelInteraction}
+          simulateOpponents={simulateOpponents}
+          onToggleSimulation={setSimulateOpponents}
+          onLoadTestBoard={handleLoadTestBoard}
+          onRollChosenDice={handleChosenDice}
+          toasts={toasts}
+          onDismissToast={dismissToast}
+        />
       </section>
 
-      <GameControlPanel
-        game={game}
-        playerView={playerView}
-        viewerId={viewerId}
-        sharedDeviceMode={sharedDeviceMode}
-        playerMessage={playerMessage}
-        diceTotal={diceTotal}
-        gameError={gameError}
-        interactionMode={interactionMode}
-        requestedMode={requestedMode}
-        onCancelInteraction={cancelInteraction}
-        actionFeedback={actionFeedback}
-        confirmedPlayers={confirmedPlayers}
-        buildAvailability={buildAvailability}
-        onRollDice={handleRollDice}
-        onEndTurn={() => game && requestOrDispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
-        onSelectMode={setRequestedMode}
-        onResetCamera={() => setCameraResetKey((key) => key + 1)}
-        onStartGame={game ? handleRestartGame : handleStartGame}
-        boardSeed={board.seed}
-        currentPlayer={currentPlayer}
-        selectedRobberTileId={selectedRobberTileId}
-        eligibleRobberVictims={eligibleRobberVictims}
-        onDiscard={(playerId, resources) => requestOrDispatch({ type: 'discard', playerId, resources })}
-        onSelectVictim={(victimId) => requestOrDispatch({
-          type: 'moveRobber',
-          playerId: game.currentPlayerId,
-          tileId: selectedRobberTileId,
-          victimId,
-        })}
-        onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
-        onTradeAction={requestOrDispatch}
-        viewerRole={viewerRole}
-        isViewerTurn={isViewerTurn}
-        isHost={isHost}
-        canStartGame={canStartGame}
-        lobbyState={lobbyState}
-        onDevelopmentAction={requestOrDispatch}
-        selectedRoadBuildingEdges={selectedRoadBuildingEdges}
-        onBeginRoadBuilding={() => {
-          setSelectedRoadBuildingEdges([]);
-          setRequestedMode(INTERACTION_MODES.ROAD_BUILDING);
-        }}
-        onFinishRoadBuilding={() => requestOrDispatch({
-          type: 'playDevelopment',
-          playerId: game.currentPlayerId,
-          card: 'roadBuilding',
-          edgeIds: selectedRoadBuildingEdges,
-        })}
-        onCancelRoadBuilding={cancelInteraction}
-        simulateOpponents={simulateOpponents}
-        onToggleSimulation={setSimulateOpponents}
-        onLoadTestBoard={handleLoadTestBoard}
-        onRollChosenDice={handleChosenDice}
-      />
     </main>
   );
 }

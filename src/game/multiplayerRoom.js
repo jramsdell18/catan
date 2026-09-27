@@ -181,9 +181,21 @@ export function canParticipantAct({ lobbyState, participantId, game }) {
   return getParticipantPlayerId(lobbyState, participantId) === game.currentPlayerId;
 }
 
+const TRADE_RESPONSE_ACTIONS = new Set(['acceptTrade', 'rejectTrade']);
+
 export function canParticipantRequestAction({ lobbyState, participantId, game, action }) {
-  if (!action || !canParticipantAct({ lobbyState, participantId, game })) return false;
-  return getParticipantPlayerId(lobbyState, participantId) === action.playerId;
+  if (!action) return false;
+  const playerId = getParticipantPlayerId(lobbyState, participantId);
+  // Trade recipients answer offers outside their own turn; the rules engine revalidates.
+  if (
+    TRADE_RESPONSE_ACTIONS.has(action.type) &&
+    game?.tradeOffer?.toPlayerIds?.includes(playerId) &&
+    lobbyState?.room.status === ROOM_STATUS.ACTIVE
+  ) {
+    return playerId === action.playerId;
+  }
+  if (!canParticipantAct({ lobbyState, participantId, game })) return false;
+  return playerId === action.playerId;
 }
 
 export function canHostStart(lobbyState, participantId) {

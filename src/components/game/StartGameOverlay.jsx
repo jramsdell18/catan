@@ -12,6 +12,9 @@ function StartGameOverlay({
   isHost = false,
   canStartGame = false,
   localTestMode = false,
+  soloBotMode = false,
+  onEnableSoloBotMode = null,
+  onExitSoloBotMode = null,
   onEnableLocalTestMode = null,
 }) {
   const connected = Boolean(localParticipant?.connected);
@@ -20,7 +23,34 @@ function StartGameOverlay({
     <div className="start-overlay" aria-labelledby="start-title">
       <p className="eyebrow">Catan Multiplayer</p>
       <h1 id="start-title">Start Game</h1>
-      {onEnableLocalTestMode && !localTestMode && (
+      {onEnableSoloBotMode && !soloBotMode && (
+        <button
+          type="button"
+          className="secondary-button"
+          data-testid="enable-solo-bots"
+          onClick={onEnableSoloBotMode}
+        >
+          Solo test with bots
+        </button>
+      )}
+      {soloBotMode && (
+        <div className="local-test-banner solo-bot-banner" data-testid="solo-bot-mode">
+          <p>
+            Solo test: you play Red. Every other seat is a bot that places randomly, rolls, and ends its turn.
+          </p>
+          {onExitSoloBotMode && (
+            <button
+              type="button"
+              className="secondary-button compact-button"
+              data-testid="exit-solo-bots"
+              onClick={onExitSoloBotMode}
+            >
+              Back to multiplayer
+            </button>
+          )}
+        </div>
+      )}
+      {onEnableLocalTestMode && !localTestMode && !soloBotMode && (
         <button
           type="button"
           className="secondary-button"
@@ -36,7 +66,7 @@ function StartGameOverlay({
         </p>
       )}
       <form className="start-controls" onSubmit={onConfirm} data-testid="player-setup-form">
-        <label htmlFor="player-count">Players</label>
+        <label htmlFor="player-count">{soloBotMode ? 'Players (you + bots)' : 'Players'}</label>
         <select
           id="player-count"
           data-testid="player-count"
@@ -55,7 +85,7 @@ function StartGameOverlay({
       </form>
       <p className="helper-text" data-testid="player-setup-helper">
         {confirmedPlayers
-          ? `Players ready: ${confirmedPlayers}. ${localTestMode ? 'All seats use this device.' : allSeatsReady ? 'All seats connected.' : 'Waiting for seats to be claimed.'}`
+          ? `Players ready: ${confirmedPlayers}. ${soloBotMode ? `You + ${confirmedPlayers - 1} bots.` : localTestMode ? 'All seats use this device.' : allSeatsReady ? 'All seats connected.' : 'Waiting for seats to be claimed.'}`
           : `Current selection: ${selectedPlayers} players`}
       </p>
       {lobbyState && (
@@ -85,7 +115,7 @@ function StartGameOverlay({
           )}
         </div>
       )}
-      {!connected && !localTestMode && <p className="helper-text">Join the table call to claim a color seat for multiplayer.</p>}
+      {!connected && !localTestMode && !soloBotMode && <p className="helper-text">Join the table call to claim a color seat for multiplayer.</p>}
     </div>
   );
 }

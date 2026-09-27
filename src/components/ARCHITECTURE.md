@@ -7,10 +7,11 @@ React components present the game and report user intent. They do not decide whe
 | Area | Role |
 |------|------|
 | `CatanScene.jsx` | Owns the Three.js scene lifecycle and turns render props into the 3D table |
-| `StartGameOverlay.jsx` | Player count, local test-mode entry, seats, and game start |
-| `GameControlPanel.jsx` | Composes the active-game controls and status surfaces |
+| `StartGameOverlay.jsx` | Player count, solo-bot and local test-mode entry, seats, and game start |
+| `GameControlPanel.jsx` | Board-first HUD: overlays status, toasts, resource/hand-count chips, and floating icon action buttons on the full-screen board (no bottom panel) |
 | `GameOverOverlay.jsx` | Winner, final state, restart, and new-game actions |
-| `game/*Controls.jsx` | Focused building, trading, development-card, robber, resource, and turn controls |
+| `game/*Controls.jsx` | Focused building, trading (swap-icon flow), development-card, robber, resource, and turn controls; larger flows open as sheets over the board |
+| `game/GameToasts.jsx` | Short, player-colored action toasts (non-interactive, max 3) |
 | `PlayerSetup.jsx` / `BoardPreview.jsx` | Smaller setup and preview surfaces |
 
 ## Interface pattern
@@ -29,7 +30,7 @@ flowchart LR
 - Controls use `playerView` for seat-private presentation.
 - A component may own temporary form state, but not resources, pieces, turns, scores, or board ownership.
 
-`GameControlPanel` is a layout/composition component. It delegates specialized workflows to smaller controls rather than implementing their rules.
+`GameControlPanel` is a layout/composition component (the board HUD). It delegates specialized workflows to smaller controls rather than implementing their rules.
 
 ## Three.js boundary
 
@@ -41,6 +42,6 @@ Low-level mesh construction stays in [`src/three`](../three/ARCHITECTURE.md). `C
 
 ## UI direction
 
-The current MVP mixes the 3D table with DOM controls and overlays. A separate planned UX roadmap will move player-facing information toward the 3D table while retaining accessible semantics and a development-only control surface. That layout change should not move rules or authoritative state into components.
+The board fills the viewport. DOM controls are compact overlays on it: a status card and toasts at the top, camera/restart/dev tools in a corner, resource and hand-count chips plus icon buttons along the bottom edge (safe-area aware). Only actions relevant to the current phase are shown or enabled; trade and development-card choices open as sheets and close back to the board. That layout change should not move rules or authoritative state into components.
 
 Keep this document focused on component responsibilities. Exact props, form fields, and render conditions are easier to understand from the component and its tests.

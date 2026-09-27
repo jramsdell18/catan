@@ -37,6 +37,8 @@ game = applyAction(game, { type: 'placeRoad', playerId: 'p1', edgeId: 'e18' });
 
 `placeSettlement`, `placeRoad`, `buildCity`, `rollDice`, `discard`, `moveRobber`, `buyDevelopment`, `playDevelopment`, `maritimeTrade`, `offerTrade`, `acceptTrade`, `rejectTrade`, `cancelTrade`, and `endTurn`.
 
+`offerTrade` accepts `toPlayerIds` (one or more opponents; legacy `toPlayerId` still works, and omitting both offers to all opponents). Each recipient answers with `acceptTrade` or `rejectTrade`; responses are recorded on the offer. The first valid accept completes the trade (both hands are rechecked at that moment); the offer closes as rejected only after every recipient declines. `state.lastTrade` records the outcome and all responses, and is included in player views.
+
 The engine covers the usual base-game setup snake, distance/connectivity rules, costs and piece limits, production and bank shortages, robber/discards, domestic and maritime trade, development cards, longest road (including blocking), largest army, and a 10-point win. Victory-point cards are represented in full engine state and must be hidden from opponents via `getPlayerView` (see below) before showing a seat’s UI or sending state to a client.
 
 ## Player views (privacy boundary)

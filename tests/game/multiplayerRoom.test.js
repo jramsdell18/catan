@@ -122,6 +122,24 @@ describe('multiplayer room lobby helpers', () => {
     })).toBe(false);
   });
 
+  it('lets trade recipients answer an offer outside their turn', () => {
+    let state = lobby();
+    state = claimSeat(state, { playerId: 'red', participantId: 'host-1', displayName: 'Host' });
+    state = claimSeat(state, { playerId: 'blue', participantId: 'guest-1', displayName: 'Guest' });
+    state = claimSeat(state, { playerId: 'white', participantId: 'guest-2', displayName: 'Guest 2' });
+    state = startLobbyGame(state);
+    const game = { currentPlayerId: 'red', tradeOffer: { fromPlayerId: 'red', toPlayerIds: ['blue'] } };
+    const request = (participantId, action) => canParticipantRequestAction({ lobbyState: state, participantId, game, action });
+
+    expect(request('guest-1', { type: 'acceptTrade', playerId: 'blue' })).toBe(true);
+    expect(request('guest-1', { type: 'rejectTrade', playerId: 'blue' })).toBe(true);
+    // Not a recipient, or answering for someone else's seat.
+    expect(request('guest-2', { type: 'acceptTrade', playerId: 'white' })).toBe(false);
+    expect(request('guest-2', { type: 'acceptTrade', playerId: 'blue' })).toBe(false);
+    // Other actions still require the sender's turn.
+    expect(request('guest-1', { type: 'endTurn', playerId: 'blue' })).toBe(false);
+  });
+
   it('marks the room read-only when the host disconnects', () => {
     const state = claimSeat(lobby(), {
       playerId: 'red',

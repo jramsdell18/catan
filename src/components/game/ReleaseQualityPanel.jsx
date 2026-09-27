@@ -13,7 +13,7 @@ function DevelopmentTestControls({
 
   return (
     <details className="test-controls" data-testid="development-test-controls">
-      <summary>Development test controls</summary>
+      <summary aria-label="Development test controls" title="Development test controls">Dev tools</summary>
       <div className="test-control-grid">
         <button
           type="button"

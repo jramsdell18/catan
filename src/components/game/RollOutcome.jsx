@@ -26,10 +26,8 @@ function RollOutcome({ game, playerView = null }) {
   if (!production && !robbery) return null;
 
   return (
-    <section className="roll-outcome" aria-labelledby="outcome-title" data-testid="roll-outcome">
-      <p className="status-label" id="outcome-title">
-        Last outcome
-      </p>
+    <details className="roll-outcome" data-testid="roll-outcome">
+      <summary className="status-label">Last outcome</summary>
       {production && (
         <>
           {Object.keys(production.gains ?? {}).length === 0 && <p>No player received resources.</p>}
@@ -64,7 +62,7 @@ function RollOutcome({ game, playerView = null }) {
             : ' No player was robbed.'}
         </p>
       )}
-    </section>
+    </details>
   );
 }
 
