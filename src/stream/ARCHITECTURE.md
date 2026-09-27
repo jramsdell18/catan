@@ -21,16 +21,18 @@ sequenceDiagram
 
 ## Responsibilities
 
-- Create or recover the current room identity/invite link.
+- Create or recover the current room identity/invite link (`?room=catan-table-<id>`; the tab that generated it is the host).
+- Show the name-only join card; colors are picked afterwards in the lobby (`StartGameOverlay`).
 - Request a short-lived token without exposing the LiveKit secret.
 - Connect/disconnect the LiveKit `Room` and clean up event handlers/tracks.
-- Publish and subscribe to camera and microphone tracks.
+- Publish camera and microphone only after the host confirms the local color (`publishMedia`), and subscribe to others' tracks.
+- Leave the call when the app signals it (`leaveSignal`, e.g. lobby full).
 - Attach subscribed audio and render player video bubbles.
-- Map LiveKit participants to game seats using metadata.
+- Map LiveKit participants to game seats using the lobby's seat assignments (legacy token metadata as a fallback). Empty seats render no bubble.
 - Publish and decode the current `catan-game` data topic.
 - Report connection, participant, and active-speaker state through callbacks.
 
-Display name, participant ID, selected seat, and hosted-room hints use `localStorage` for refresh convenience. They are not secure authentication credentials.
+Display name, participant ID, and hosted-room hints use `localStorage` for refresh convenience. They are not secure authentication credentials.
 
 ## Current coupling and planned boundary
 

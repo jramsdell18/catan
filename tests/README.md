@@ -176,7 +176,8 @@ Seeded random board: 18 number tokens with official counts, no 7, red numbers (6
 | File | Focus |
 |------|--------|
 | `three-render.spec.js` | Desktop + mobile: WebGL canvas visible, non-blank screenshot |
-| `game-flow.spec.js` | Set players → start game → setup snake → starting resources → roll → end turn; restart |
+| `game-flow.spec.js` | Gear menu → local test / solo game → setup snake → starting resources → roll → end turn; restart; build menu; trades; invite-link join flow (color picker, race, lobby full) via simulated room hooks |
+| `release-quality.spec.js` | Desktop + mobile lifecycle through the gear menu's dev tools; minimum tap-target size |
 
 **Dev-only test API:** In `npm run dev`, the app exposes `window.__CATAN_TEST_API` so setup placements use the same handlers as 3D highlights (canvas raycasts are too brittle for CI). Production builds do not rely on this for gameplay.
 

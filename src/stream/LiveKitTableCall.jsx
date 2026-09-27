@@ -5,7 +5,6 @@ import { getOrCreateParticipantId } from '../game/multiplayerRoom.js';
 const ROOM_PREFIX = 'catan-table-';
 const ROOM_ID_LENGTH = 12;
 const DISPLAY_NAME_KEY = 'catanLiveKitDisplayName';
-const PLAYER_ID_KEY = 'catanLiveKitPlayerId';
 const HOST_ROOM_KEY = 'catanLiveKitHostRoom';
 const DATA_TOPIC = 'catan-game';
 const TOKEN_ENDPOINT =
@@ -14,7 +13,10 @@ const TOKEN_ENDPOINT =
 function LiveKitTableCall({
   players,
   playerStats = [],
-  claimedPlayerIds = [],
+  seatAssignments = null,
+  publishMedia = false,
+  leaveSignal = 0,
+  hideJoin = false,
   outboundMessage = null,
   onDataMessage,
   onLocalParticipantChange,
@@ -29,9 +31,6 @@ function LiveKitTableCall({
   const onParticipantPresenceChangeRef = useRef(onParticipantPresenceChange);
   const participantId = useMemo(() => getOrCreateParticipantId(), []);
   const [displayName, setDisplayName] = useState(() => localStorage.getItem(DISPLAY_NAME_KEY) || '');
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
-    return localStorage.getItem(PLAYER_ID_KEY) || players[0]?.id || '';
-  });
   const [connectionState, setConnectionState] = useState('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [participants, setParticipants] = useState([]);
@@ -41,20 +40,18 @@ function LiveKitTableCall({
 
   const roomInfo = useMemo(() => ensureRoomInfo(), []);
   const roomName = roomInfo.roomName;
-  const inviteUrl = window.location.href;
+  const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
   const isJoined = connectionState === 'connected';
   const isJoining = connectionState === 'joining';
-  const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? players[0];
   const localParticipant = participants.find((participant) => participant.isLocal) ?? null;
-  const participantsByPlayerId = useMemo(() => mapParticipantsToPlayers(participants, players), [participants, players]);
+  const mediaPublishedRef = useRef(false);
+  const participantsByPlayerId = useMemo(
+    () => mapParticipantsToPlayers(participants, players, seatAssignments),
+    [participants, players, seatAssignments],
+  );
   const statsByPlayerId = useMemo(
     () => new Map(playerStats.map((stats) => [stats.playerId, stats])),
     [playerStats],
-  );
-  const claimedPlayerIdSet = useMemo(() => new Set(claimedPlayerIds), [claimedPlayerIds]);
-  const availablePlayers = useMemo(
-    () => players.filter((player) => player.id === selectedPlayerId || !claimedPlayerIdSet.has(player.id)),
-    [claimedPlayerIdSet, players, selectedPlayerId],
   );
 
   useEffect(() => {
@@ -68,21 +65,30 @@ function LiveKitTableCall({
       connected: isJoined,
       participantId,
       displayName: displayName.trim(),
-      playerId: selectedPlayerId || null,
+      playerId: null,
       roomName,
       isRoomCreator: roomInfo.isRoomCreator,
     });
-  }, [displayName, isJoined, participantId, roomInfo.isRoomCreator, roomName, selectedPlayerId]);
+  }, [displayName, isJoined, participantId, roomInfo.isRoomCreator, roomName]);
 
+  // Camera and mic start only once the host has confirmed this person's color.
   useEffect(() => {
-    if (!availablePlayers.some((player) => player.id === selectedPlayerId)) {
-      const nextPlayerId = availablePlayers[0]?.id || '';
-      setSelectedPlayerId(nextPlayerId);
-      if (nextPlayerId) {
-        localStorage.setItem(PLAYER_ID_KEY, nextPlayerId);
-      }
-    }
-  }, [availablePlayers, selectedPlayerId]);
+    const room = roomRef.current;
+    if (!room || !isJoined || !publishMedia || mediaPublishedRef.current) return;
+    mediaPublishedRef.current = true;
+    room.localParticipant.enableCameraAndMicrophone()
+      .then(() => refreshParticipants(room))
+      .catch(() => setStatusMessage('Camera or microphone is blocked. You can still play.'));
+  }, [isJoined, publishMedia]);
+
+  const lastLeaveSignalRef = useRef(leaveSignal);
+  useEffect(() => {
+    if (leaveSignal === lastLeaveSignalRef.current) return;
+    lastLeaveSignalRef.current = leaveSignal;
+    disposeRoom();
+    setConnectionState('idle');
+    setStatusMessage('');
+  }, [leaveSignal]);
 
   useEffect(() => {
     return () => {
@@ -105,19 +111,14 @@ function LiveKitTableCall({
   async function handleJoin(event) {
     event.preventDefault();
 
-    if (!selectedPlayer) {
-      return;
-    }
-
     const trimmedName = displayName.trim();
     if (!trimmedName) {
       return;
     }
 
     setConnectionState('joining');
-    setStatusMessage('Joining table voice...');
+    setStatusMessage(roomInfo.isRoomCreator ? 'Creating lobby…' : 'Joining lobby…');
     localStorage.setItem(DISPLAY_NAME_KEY, trimmedName);
-    localStorage.setItem(PLAYER_ID_KEY, selectedPlayer.id);
 
     try {
       disposeRoom();
@@ -126,7 +127,6 @@ function LiveKitTableCall({
         roomName,
         participantName: trimmedName,
         participantIdentity: participantId,
-        playerId: selectedPlayer.id,
       });
 
       const room = new Room({
@@ -172,7 +172,7 @@ function LiveKitTableCall({
       });
 
       await room.connect(credentials.serverUrl, credentials.participantToken);
-      await room.localParticipant.enableCameraAndMicrophone();
+      mediaPublishedRef.current = false;
       attachSubscribedAudio(room, audioHostRef.current);
       refreshParticipants(room);
 
@@ -279,6 +279,8 @@ function LiveKitTableCall({
       <div className="table-video-layer" aria-label="Player video positions">
         {players.map((player) => {
           const participant = participantsByPlayerId.get(player.id) ?? null;
+          // Empty seats get no bubble, so the lobby and board stay uncluttered.
+          if (!participant) return null;
           const isSpeaking = participant ? activeSpeakerIds.has(participant.identity) : false;
           const stats = statsByPlayerId.get(player.id) ?? null;
 
@@ -294,9 +296,9 @@ function LiveKitTableCall({
         })}
       </div>
 
+      {isJoined ? (
       <div className="livekit-call-widget">
-        {isJoined ? (
-          controlsCollapsed ? (
+          {controlsCollapsed ? (
             <button
               type="button"
               className={`livekit-collapse-toggle${localParticipant?.isMicrophoneEnabled ? '' : ' is-muted'}`}
@@ -310,7 +312,7 @@ function LiveKitTableCall({
           ) : (
             <div className="livekit-control-strip" aria-label="LiveKit call controls">
               <div className="livekit-control-heading">
-                <strong>{localParticipant?.name || selectedPlayer?.label || 'Joined'}</strong>
+                <strong>{localParticipant?.name || 'Joined'}</strong>
                 <button
                   type="button"
                   className="livekit-icon-button"
@@ -340,11 +342,24 @@ function LiveKitTableCall({
                 Leave
               </button>
             </div>
-          )
-        ) : (
-          <form className="livekit-join-panel" onSubmit={handleJoin}>
-            <div>
-              <label htmlFor="livekitDisplayName">Name</label>
+          )}
+        {(!controlsCollapsed || statusMessage) && (
+          <p className="livekit-status" role="status" aria-live="polite">
+            {statusMessage}
+          </p>
+        )}
+      </div>
+      ) : !hideJoin && (
+          <form className="start-overlay lobby-card lobby-join" onSubmit={handleJoin} data-testid="lobby-join" aria-labelledby="lobby-join-title">
+            <p className="eyebrow">{roomInfo.isRoomCreator ? 'Catan with friends' : 'You’re invited'}</p>
+            <h1 id="lobby-join-title">{roomInfo.isRoomCreator ? 'Host a game' : 'Join the game'}</h1>
+            <p className="helper-text">
+              {roomInfo.isRoomCreator
+                ? 'Enter your name to open a lobby, then share the invite link.'
+                : 'Enter your name, then pick a color in the lobby.'}
+            </p>
+            <div className="lobby-field">
+              <label className="lobby-label" htmlFor="livekitDisplayName">Your name</label>
               <input
                 id="livekitDisplayName"
                 type="text"
@@ -354,39 +369,16 @@ function LiveKitTableCall({
                 autoComplete="name"
                 maxLength={40}
                 required
+                data-testid="lobby-name"
               />
             </div>
-
-            <div>
-              <label htmlFor="livekitPlayerSeat">Seat</label>
-              <select
-                id="livekitPlayerSeat"
-                value={selectedPlayerId}
-                onChange={(event) => setSelectedPlayerId(event.target.value)}
-              >
-                {availablePlayers.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button type="submit" disabled={isJoining || !selectedPlayer}>
-              {isJoining ? 'Joining...' : 'Join call'}
+            <button type="submit" className="lobby-primary" disabled={isJoining} data-testid="join-lobby">
+              {isJoining ? 'Connecting…' : roomInfo.isRoomCreator ? 'Create lobby' : 'Continue'}
             </button>
-            <button type="button" className="secondary-button" onClick={handleCopyInvite}>
-              Copy invite
-            </button>
+            <p className="livekit-status" role="status" aria-live="polite">{statusMessage}</p>
+            <p className="lobby-footnote">Voice and camera start after you pick a color. Want to play alone? Use the ⚙ settings button.</p>
           </form>
-        )}
-
-        {(!isJoined || !controlsCollapsed || statusMessage) && (
-          <p className="livekit-status" role="status" aria-live="polite">
-            {statusMessage}
-          </p>
-        )}
-      </div>
+      )}
 
       <div ref={audioHostRef} className="livekit-audio-outlet" aria-hidden="true" />
     </>
@@ -499,11 +491,19 @@ function getRoomParticipants(room) {
   });
 }
 
-function mapParticipantsToPlayers(participants, players) {
+function mapParticipantsToPlayers(participants, players, seatAssignments = null) {
   const playerIds = new Set(players.map((player) => player.id));
   const participantMap = new Map();
+  const seatByIdentity = new Map(
+    Object.entries(seatAssignments ?? {}).map(([playerId, identity]) => [identity, playerId]),
+  );
 
   participants.forEach((participant) => {
+    const seatPlayerId = seatByIdentity.get(participant.identity);
+    if (seatPlayerId && playerIds.has(seatPlayerId)) {
+      participantMap.set(seatPlayerId, participant);
+      return;
+    }
     const metadataPlayerId = getMetadataPlayerId(participant.metadata);
     const playerId = playerIds.has(participant.identity) ? participant.identity : metadataPlayerId;
 

@@ -21,8 +21,9 @@ flowchart LR
 - **Netlify** serves the built web application and runs the function that signs LiveKit tokens.
 - **LiveKit Cloud** connects players for voice/video and currently transports lobby actions and game snapshots.
 - **The host browser** is the current game authority.
-- **Local test mode** runs the same rules locally without joining LiveKit and is available only in development builds.
-- **Solo test with bots** is available in every build (including Netlify): one person plays Red locally, without LiveKit, and the other seats are no-strategy test bots (`src/game/bots.js`).
+- **Local test mode** runs the same rules locally without joining LiveKit and is available only in development builds (gear menu → Developer).
+- **Solo test with bots** is available in every build (including Netlify) from the gear menu: one person plays Red locally, without LiveKit, and the other seats are no-strategy test bots (`src/game/bots.js`).
+- **Join flow:** invite links carry `?room=…`. Guests connect with a name only, receive the host's lobby, and pick a color; the host validates each claim (`resolveSeatClaim`, first claim wins) and answers with `seat:claimResult`. A guest who finds every color taken sees a "Lobby is full" screen and is disconnected.
 
 Known MVP limitations: host departure halts play for everyone, the complete game state — including hidden hands and deck order — crosses the LiveKit data channel, gameplay availability is coupled to LiveKit, and active games do not survive refreshes or restarts.
 

@@ -9,7 +9,12 @@ async function state(page) {
   return page.evaluate(() => window.__CATAN_TEST_API.getState());
 }
 
+async function openSettings(page) {
+  if (!(await page.getByTestId('settings-menu').isVisible())) await page.getByTestId('settings-toggle').click();
+}
+
 async function enableLocalTestMode(page) {
+  await openSettings(page);
   await page.getByTestId('enable-local-test-mode').click();
   await expect.poll(async () => (await state(page)).localTestMode).toBe(true);
 }
@@ -41,23 +46,28 @@ for (const viewport of viewports) {
 
     await expect(page.getByTestId('rules-help')).toHaveCount(0);
 
+    // Dev tools live inside the settings gear menu.
+    await openSettings(page);
     const tools = page.getByTestId('development-test-controls');
     await tools.locator('summary').click();
     await tools.getByLabel('Board seed').fill('24680');
     await tools.getByRole('button', { name: 'Load deterministic board' }).click();
     await expect.poll(async () => (await state(page)).boardSeed).toBe(24680);
 
-    await page.getByTestId('player-count').selectOption('3');
-    await page.getByTestId('set-players').click();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('player-count-3').click();
     await page.getByTestId('start-game').click();
     await completeSetup(page);
 
+    await openSettings(page);
+    await tools.locator('summary').click();
     await tools.getByLabel('Die one').fill('2');
     await tools.getByLabel('Die two').fill('3');
     await tools.getByRole('button', { name: 'Roll chosen dice' }).click();
     await expect.poll(async () => (await state(page)).phase).toBe('action');
     expect((await state(page)).dice).toEqual([2, 3]);
 
+    await page.keyboard.press('Escape');
     await page.evaluate(() => window.__CATAN_TEST_API.prepareVictory('red'));
     await page.getByTestId('end-turn').click();
     await expect(page.getByTestId('game-over')).toContainText('Red wins!');

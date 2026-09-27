@@ -42,7 +42,7 @@ function ResourceStrip({ game, playerView = null }) {
           return (
             <li
               key={player.id}
-              className={`hud-player-chip${player.id === currentPlayerId ? ' is-current' : ''}`}
+              className={`hud-player-chip${player.id === currentPlayerId ? ' is-current' : ''}${player.isSelf ? ' is-self' : ''}`}
               style={{ '--chip-color': colorOf(player.id) }}
               data-testid={`hand-count-${player.id}`}
               aria-label={`${player.name}: ${count} ${count === 1 ? 'card' : 'cards'}, ${getVictoryPoints(player)} victory points`}

@@ -7,8 +7,9 @@ React components present the game and report user intent. They do not decide whe
 | Area | Role |
 |------|------|
 | `CatanScene.jsx` | Owns the Three.js scene lifecycle and turns render props into the 3D table |
-| `StartGameOverlay.jsx` | Player count, solo-bot and local test-mode entry, seats, and game start |
-| `GameControlPanel.jsx` | Board-first HUD: overlays status, toasts, resource/hand-count chips, and floating icon action buttons on the full-screen board (no bottom panel) |
+| `StartGameOverlay.jsx` | Lobby card: host lobby (invite link, player count, colors, start), guest color picker, waiting, lobby-full screen, solo and local-test setup |
+| `game/SettingsMenu.jsx` | Small gear in the bottom-right corner: bots/solo game, reset camera, restart, rules link, dev-only tools |
+| `GameControlPanel.jsx` | Board-first HUD: one-line prompt, toasts, resource/hand-count chips, and only the relevant actions ending in one highlighted primary action |
 | `GameOverOverlay.jsx` | Winner, final state, restart, and new-game actions |
 | `game/*Controls.jsx` | Focused building, trading (swap-icon flow), development-card, robber, resource, and turn controls; larger flows open as sheets over the board |
 | `game/GameToasts.jsx` | Short, player-colored action toasts (non-interactive, max 3) |
@@ -42,6 +43,6 @@ Low-level mesh construction stays in [`src/three`](../three/ARCHITECTURE.md). `C
 
 ## UI direction
 
-The board fills the viewport. DOM controls are compact overlays on it: a status card and toasts at the top, camera/restart/dev tools in a corner, resource and hand-count chips plus icon buttons along the bottom edge (safe-area aware). Only actions relevant to the current phase are shown or enabled; trade and development-card choices open as sheets and close back to the board. That layout change should not move rules or authoritative state into components.
+The board fills the viewport. DOM controls are compact overlays on it: a one-line prompt and toasts at the top, resource and hand-count chips plus the relevant action buttons along the bottom edge, and the settings gear in the bottom-right corner (safe-area aware). Only actions relevant to the current phase are shown (builds are grouped under one Build menu); trade and development-card choices open as sheets and close back to the board. That layout change should not move rules or authoritative state into components.
 
 Keep this document focused on component responsibilities. Exact props, form fields, and render conditions are easier to understand from the component and its tests.

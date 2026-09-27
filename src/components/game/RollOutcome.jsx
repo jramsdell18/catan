@@ -17,17 +17,20 @@ function playerName(source, playerId) {
  * @param {object} props.game full engine state (fallback)
  * @param {object|null} [props.playerView] sanitized view preferred for privacy
  */
-function RollOutcome({ game, playerView = null }) {
+function RollOutcome({ game, playerView = null, diceTotal = null }) {
   const source = playerView ?? game;
   if (!source) return null;
 
   const production = source.lastProduction;
   const robbery = source.lastRobbery;
-  if (!production && !robbery) return null;
+  if (!production && !robbery && !source.dice) return null;
 
   return (
     <details className="roll-outcome" data-testid="roll-outcome">
-      <summary className="status-label">Last outcome</summary>
+      <summary className="roll-chip" aria-label={diceTotal ? `Last roll ${diceTotal}: show details` : 'Last outcome details'}>
+        {source.dice ? <span data-testid="last-roll">🎲 {diceTotal ?? source.dice[0] + source.dice[1]}</span> : 'Details'}
+      </summary>
+      <div className="roll-outcome-body">
       {production && (
         <>
           {Object.keys(production.gains ?? {}).length === 0 && <p>No player received resources.</p>}
@@ -62,6 +65,7 @@ function RollOutcome({ game, playerView = null }) {
             : ' No player was robbed.'}
         </p>
       )}
+      </div>
     </details>
   );
 }

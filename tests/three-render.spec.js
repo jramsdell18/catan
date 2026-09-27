@@ -63,6 +63,7 @@ test('board and camera updates preserve the WebGL renderer', async ({ page }) =>
   }));
   const nextBoardSeed = initial.boardSeed === 24680 ? 24681 : 24680;
 
+  await page.getByTestId('settings-toggle').click();
   const testControls = page.getByTestId('development-test-controls');
   await testControls.locator('summary').click();
   await testControls.getByLabel('Board seed').fill(String(nextBoardSeed));
@@ -76,6 +77,7 @@ test('board and camera updates preserve the WebGL renderer', async ({ page }) =>
   ).toBe(initial.renderId);
   expect(initial.boardSeed).not.toBe(nextBoardSeed);
 
+  // Still inside the open settings menu.
   await page.getByTestId('reset-camera').click();
   await expect.poll(
     () => page.evaluate(() => window.__CATAN_SCENE_STATS.renderId),

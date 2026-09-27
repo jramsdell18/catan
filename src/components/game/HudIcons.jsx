@@ -81,3 +81,30 @@ export function RestartIcon({ size = 22 }) {
     </svg>
   );
 }
+
+export function GearIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </svg>
+  );
+}
+
+export function HammerIcon({ size = 26 }) {
+  return (
+    <svg {...base} width={size} height={size}>
+      <path d="M14 7l-9.5 9.5a1.8 1.8 0 0 0 2.5 2.5L16.5 9.5" />
+      <path d="M12.5 5.5L15 3l6 6-2.5 2.5-2-2-1.5 1.5-3-3 1.5-1.5z" />
+    </svg>
+  );
+}
+
+export function LinkIcon({ size = 20 }) {
+  return (
+    <svg {...base} width={size} height={size}>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </svg>
+  );
+}

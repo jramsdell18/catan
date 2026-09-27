@@ -18,9 +18,14 @@ async function getTestState(page) {
   return page.evaluate(() => window.__CATAN_TEST_API.getState());
 }
 
+async function openSettings(page) {
+  if (!(await page.getByTestId('settings-menu').isVisible())) await page.getByTestId('settings-toggle').click();
+  await expect(page.getByTestId('settings-menu')).toBeVisible();
+}
+
 async function enableLocalTestMode(page) {
-  const button = page.getByTestId('enable-local-test-mode');
-  if (await button.isVisible()) await button.click();
+  await openSettings(page);
+  await page.getByTestId('enable-local-test-mode').click();
   await expect(page.getByTestId('local-test-mode')).toBeVisible();
   await expect.poll(async () => (await getTestState(page)).localTestMode).toBe(true);
 }
@@ -32,17 +37,25 @@ function diceForTotal(total) {
 
 async function confirmPlayers(page, count = 3) {
   await enableLocalTestMode(page);
-  await page.getByTestId('player-count').selectOption(String(count));
-  await page.getByTestId('set-players').click();
-  await expect(page.getByTestId('player-setup-helper')).toContainText(`Players ready: ${count}`);
+  await page.getByTestId(`player-count-${count}`).click();
+  await expect(page.getByTestId(`player-count-${count}`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('player-setup-helper')).toContainText(`All ${count} seats`);
   await expect(page.getByTestId('start-game')).toBeEnabled();
 }
 
 async function startGame(page) {
   await page.getByTestId('start-game').click();
   await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
-  // Overlay hides after start; restart lives on the bottom control panel.
-  await expect(page.getByTestId('restart-game')).toHaveText('Restart Game');
+  // The lobby card hides after start; restart lives in the settings menu.
+  await expect(page.getByTestId('start-game')).toHaveCount(0);
+}
+
+async function startSoloGame(page, count = 3) {
+  await openSettings(page);
+  await page.getByTestId(`settings-solo-count-${count}`).click();
+  await page.getByTestId('settings-start-solo').click();
+  await expect(page.getByTestId('settings-menu')).toHaveCount(0);
+  await expect.poll(async () => (await getTestState(page)).phase).toBe('setup');
 }
 
 /**
@@ -91,15 +104,41 @@ test.describe('lobby and board controls', () => {
     await page.waitForFunction(() => window.__CATAN_RENDER_READY === true);
   });
 
-  test('Start Game stays disabled until players are confirmed', async ({ page }) => {
-    await expect(page.getByTestId('start-game')).toBeDisabled();
-    await expect(page.getByTestId('status-message')).toContainText('Join the table call');
+  test('first visit shows only the name card and a small settings gear', async ({ page }) => {
+    await expect(page.getByTestId('lobby-join')).toBeVisible();
+    await expect(page.getByTestId('lobby-join')).toContainText('Host a game');
+    await expect(page.getByTestId('settings-toggle')).toBeVisible();
+    await expect(page.getByTestId('settings-toggle')).toHaveAccessibleName('Settings');
+    // No lobby controls, solo panel, or turn buttons until they are relevant.
+    await expect(page.getByTestId('start-game')).toHaveCount(0);
+    await expect(page.getByTestId('enable-solo-bots')).toHaveCount(0);
+    await expect(page.getByTestId('roll-dice')).toHaveCount(0);
+    await expect(page.getByTestId('end-turn')).toHaveCount(0);
+    expect(await page.locator('button:visible').count()).toBeLessThanOrEqual(2);
 
     await confirmPlayers(page, 4);
-    await expect(page.getByTestId('status-message')).toContainText('4 players selected');
     await expect(page.getByTestId('start-game')).toBeEnabled();
-    await expect(page.getByTestId('roll-dice')).toBeDisabled();
-    await expect(page.getByTestId('end-turn')).toBeDisabled();
+    await expect(page.getByTestId('roll-dice')).toHaveCount(0);
+  });
+
+  test('settings gear sits in the bottom-right corner clear of the game buttons', async ({ page }) => {
+    test.setTimeout(90_000);
+    await confirmPlayers(page, 3);
+    await startGame(page);
+    await completeSetup(page);
+    const viewport = page.viewportSize();
+    const gear = await page.getByTestId('settings-toggle').boundingBox();
+    expect(gear.x + gear.width).toBeGreaterThan(viewport.width - 40);
+    expect(gear.y + gear.height).toBeGreaterThan(viewport.height - 40);
+    const roll = await page.getByTestId('roll-dice').boundingBox();
+    const overlaps = !(roll.x + roll.width <= gear.x || gear.x + gear.width <= roll.x
+      || roll.y + roll.height <= gear.y || gear.y + gear.height <= roll.y);
+    expect(overlaps).toBe(false);
+    await openSettings(page);
+    await expect(page.getByTestId('reset-camera')).toBeVisible();
+    await expect(page.getByTestId('restart-game')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings-menu')).toHaveCount(0);
   });
 
   test('starting a 3-player game enters setup for the first seat', async ({ page }) => {
@@ -112,7 +151,7 @@ test.describe('lobby and board controls', () => {
     expect(state.settlementOptions.length).toBeGreaterThan(0);
     expect(state.roadOptions).toEqual([]);
 
-    await expect(page.getByTestId('status-message')).toContainText('places a settlement');
+    await expect(page.getByTestId('status-message')).toContainText('place your settlement');
     await expect(page.getByTestId('player-resources')).toBeVisible();
     await expect(page.getByTestId('player-state-red')).toHaveAttribute('data-active', 'true');
   });
@@ -149,9 +188,11 @@ test.describe('setup snake through production turn', () => {
       });
     }
 
-    await expect(page.getByTestId('status-message')).toContainText('rolls the dice');
-    await expect(page.getByTestId('roll-dice')).toBeEnabled();
-    await expect(page.getByTestId('end-turn')).toBeDisabled();
+    await expect(page.getByTestId('status-message')).toContainText('roll the dice');
+    // Exactly one highlighted primary action for the phase.
+    await expect(page.getByTestId('roll-dice')).toBeVisible();
+    await expect(page.getByTestId('end-turn')).toHaveCount(0);
+    await expect(page.getByTestId('toggle-build')).toHaveCount(0);
 
     const productionCandidate = afterSetup.productionCandidates[0];
     expect(productionCandidate).toBeTruthy();
@@ -211,6 +252,7 @@ test.describe('setup snake through production turn', () => {
       .toBe(1);
 
     page.once('dialog', (dialog) => dialog.accept());
+    await openSettings(page);
     await page.getByTestId('restart-game').click();
     await expect(page.getByTestId('engine-phase')).toHaveText('Engine phase: setup');
 
@@ -258,27 +300,31 @@ test.describe('setup snake through production turn', () => {
     await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
     await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
 
-    // Board-overlay controls are icon-only; costs stay discoverable via the stable accessible name.
-    for (const kind of ['road', 'settlement', 'city']) {
-      await expect(page.getByTestId(`build-${kind}`).locator('svg')).toHaveCount(1);
-      await expect(page.getByTestId(`build-${kind}`)).toHaveText('');
-    }
-    await expect(page.getByTestId('build-road')).toHaveAccessibleName('Build road: 1 brick + 1 wood');
-    await expect(page.getByTestId('build-settlement')).toHaveAccessibleName('Build settlement: 1 brick + 1 wood + 1 hay + 1 sheep');
-    await expect(page.getByTestId('build-city')).toHaveAccessibleName('Build city: 3 ore + 2 hay');
-    await expect(page.getByTestId('build-city')).toBeDisabled();
-    await expect(page.getByTestId('build-city')).toHaveAttribute('title', 'Build city: 3 ore + 2 hay. Not enough resources.');
+    // One Build button: builds you can make are buttons, the rest are cost reminders (never disabled buttons).
+    const oreNow = (await getTestState(page)).resources.red.ore;
+    await page.evaluate((ore) => window.__CATAN_TEST_API.giveResources('red', { ore: -ore }), oreNow);
+    await page.getByTestId('toggle-build').click();
+    await expect(page.getByTestId('build-menu')).toBeVisible();
+    await expect(page.getByTestId('build-city')).toHaveCount(0);
+    await expect(page.getByTestId('build-need-city')).toContainText('City');
+    await expect(page.getByTestId('build-need-city')).toHaveAttribute('title', 'Build city: 3 ore + 2 hay. Not enough resources.');
+    await expect(page.locator('[data-testid="build-menu"] button:disabled')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('build-menu')).toHaveCount(0);
 
     await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', {
       wood: 8, brick: 8, ore: 3, hay: 5, sheep: 3,
     }));
-    await expect(page.getByTestId('build-city')).toBeEnabled();
-    // Enabling must not change the accessible name; only the hint drops the reason.
+    await page.getByTestId('toggle-build').click();
+    await expect(page.getByTestId('build-city')).toBeVisible();
+    await expect(page.getByTestId('build-city').locator('svg')).toHaveCount(1);
     await expect(page.getByTestId('build-city')).toHaveAccessibleName('Build city: 3 ore + 2 hay');
     await expect(page.getByTestId('build-city')).toHaveAttribute('title', 'Build city: 3 ore + 2 hay');
+    await expect(page.getByTestId('build-road')).toHaveAccessibleName('Build road: 1 brick + 1 wood');
 
     const beforeCity = await getTestState(page);
     await page.getByTestId('build-city').click();
+    await expect(page.getByTestId('build-menu')).toHaveCount(0);
     const cityTargets = (await getTestState(page)).settlementOptions;
     expect(cityTargets.length).toBeGreaterThan(0);
     await page.evaluate((targetId) => window.__CATAN_TEST_API.selectTarget(targetId), cityTargets[0]);
@@ -293,6 +339,7 @@ test.describe('setup snake through production turn', () => {
     const roadPlan = afterCity.settlementRoadPlan;
     expect(roadPlan.length).toBeGreaterThan(0);
     for (const edgeId of roadPlan) {
+      await page.getByTestId('toggle-build').click();
       await page.getByTestId('build-road').click();
       const roadTargets = (await getTestState(page)).roadOptions;
       expect(roadTargets).toContain(edgeId);
@@ -304,6 +351,7 @@ test.describe('setup snake through production turn', () => {
     const state = await getTestState(page);
     expect(state.buildAvailability.settlement.enabled).toBe(true);
     const beforeSettlement = state;
+    await page.getByTestId('toggle-build').click();
     await page.getByTestId('build-settlement').click();
     const settlementTargets = (await getTestState(page)).settlementOptions;
     expect(settlementTargets.length).toBeGreaterThan(0);
@@ -536,11 +584,14 @@ test('solo bot mode: bots place, roll, and end turns automatically', async ({ pa
   test.setTimeout(90000);
   await page.goto('/');
   await waitForTestApi(page);
-  await page.getByTestId('enable-solo-bots').click();
+  // Bots are switched on from the small settings menu, which turns the lobby card into solo setup.
+  await openSettings(page);
+  await page.getByTestId('settings-bots').click();
+  await expect(page.getByTestId('settings-bots')).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('solo-bot-mode')).toBeVisible();
-  await page.getByTestId('player-count').selectOption('3');
-  await page.getByTestId('set-players').click();
-  await expect(page.getByTestId('player-setup-helper')).toContainText('You + 2 bots');
+  await page.getByTestId('player-count-3').click();
+  await expect(page.getByTestId('player-setup-helper')).toContainText('You play Red with 2 bots');
   await page.getByTestId('start-game').click();
 
   const state = await getTestState(page);
@@ -582,10 +633,7 @@ test('solo bot mode: bots answer offers, can propose to the human, and actions s
   test.setTimeout(120000);
   await page.goto('/');
   await waitForTestApi(page);
-  await page.getByTestId('enable-solo-bots').click();
-  await page.getByTestId('player-count').selectOption('3');
-  await page.getByTestId('set-players').click();
-  await page.getByTestId('start-game').click();
+  await startSoloGame(page, 3);
 
   for (let placement = 0; placement < 2; placement += 1) {
     await expect.poll(async () => {
@@ -647,4 +695,135 @@ test('solo bot mode: bots answer offers, can propose to the human, and actions s
   expect((await getTestState(page)).lastTrade).toMatchObject({ type: 'rejected', playerId: 'red', fromPlayerId: 'blue' });
   // The bot carries on with its turn after the answer.
   await expect.poll(async () => (await getTestState(page)).currentPlayerId, { timeout: 15000 }).not.toBe('blue');
+});
+
+test.describe('invite link join flow', () => {
+  async function receive(page, type, payload, participantId = 'host-1') {
+    await page.evaluate(({ type: messageType, payload: messagePayload, participantId: sender }) => {
+      window.__CATAN_TEST_API.receiveMultiplayerMessage({ type: messageType, payload: messagePayload }, { participantId: sender });
+    }, { type, payload, participantId });
+  }
+
+  async function outbound(page) {
+    return page.evaluate(() => window.__CATAN_TEST_API.getOutboundMessages());
+  }
+
+  function hostLobby(claims, playerCount = 4) {
+    const seats = [
+      ['red', 'Red', '#c83c34'], ['blue', 'Blue', '#2f67b2'], ['white', 'White', '#f1efe7'], ['orange', 'Orange', '#e28b2d'],
+    ].slice(0, playerCount).map(([playerId, label, color]) => ({
+      playerId, label, color,
+      claimedBy: claims[playerId]?.[0] ?? null,
+      displayName: claims[playerId]?.[1] ?? '',
+      connected: Boolean(claims[playerId]),
+    }));
+    return {
+      room: { roomName: 'catan-table-e2e', hostParticipantId: 'host-1', status: 'lobby', playerCount },
+      seats,
+      spectators: [],
+      version: Date.now(),
+    };
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?room=catan-table-e2e');
+    await waitForTestApi(page);
+  });
+
+  test('an invited guest picks an open color and re-picks after losing a race', async ({ page }) => {
+    await expect(page.getByTestId('lobby-join')).toContainText('Join the game');
+    await expect(page.getByTestId('lobby-join').locator('select')).toHaveCount(0);
+
+    await page.evaluate(() => window.__CATAN_TEST_API.simulateRoomConnection({ participantId: 'guest-1', displayName: 'Sam' }));
+    await expect(page.getByTestId('lobby-waiting')).toBeVisible();
+    expect((await outbound(page)).map((message) => message.type)).toContain('lobby:hello');
+    // Connecting does not claim a seat: the guest has not joined the game yet.
+    expect((await outbound(page)).some((message) => message.type === 'seat:claim')).toBe(false);
+
+    await receive(page, 'lobby:state', { lobbyState: hostLobby({ red: ['host-1', 'Johnny'] }) });
+    await expect(page.getByTestId('color-picker')).toBeVisible();
+    await expect(page.getByTestId('pick-color-red')).toBeDisabled();
+    await expect(page.getByTestId('pick-color-red')).toHaveAttribute('data-status', 'taken');
+    await expect(page.getByTestId('pick-color-red')).toContainText('Johnny');
+    await expect(page.getByTestId('pick-color-blue')).toBeEnabled();
+    expect((await getTestState(page)).viewerId).toBeNull();
+
+    await page.getByTestId('pick-color-blue').click();
+    await expect.poll(async () => (await outbound(page)).filter((message) => message.type === 'seat:claim').map((message) => message.payload.playerId))
+      .toEqual(['blue']);
+    await expect(page.getByTestId('pick-color-orange')).toBeDisabled(); // waiting for the host's answer
+
+    // The host gave Blue to someone whose claim arrived first.
+    await receive(page, 'seat:claimResult', { to: 'guest-1', ok: false, playerId: 'blue', reason: 'taken', takenBy: 'Lee' });
+    await receive(page, 'lobby:state', { lobbyState: hostLobby({ red: ['host-1', 'Johnny'], blue: ['guest-7', 'Lee'] }) });
+    await expect(page.getByTestId('claim-notice')).toContainText('Blue was just taken by Lee. Pick another color.');
+    await expect(page.getByTestId('pick-color-blue')).toBeDisabled();
+
+    await page.getByTestId('pick-color-white').click();
+    await receive(page, 'seat:claimResult', { to: 'guest-1', ok: true, playerId: 'white' });
+    await receive(page, 'lobby:state', { lobbyState: hostLobby({ red: ['host-1', 'Johnny'], blue: ['guest-7', 'Lee'], white: ['guest-1', 'Sam'] }) });
+    await expect(page.getByTestId('guest-lobby')).toContainText('You’re White');
+    await expect(page.getByTestId('pick-color-white')).toHaveAttribute('data-status', 'mine');
+    await expect(page.getByTestId('player-setup-helper')).toContainText('Waiting for the host to start (3/4 players)');
+    await expect(page.getByTestId('claim-notice')).toHaveCount(0);
+    expect((await getTestState(page)).viewerId).toBe('white');
+  });
+
+  test('a full lobby shows a clear screen instead of letting the guest in', async ({ page }) => {
+    await page.evaluate(() => window.__CATAN_TEST_API.simulateRoomConnection({ participantId: 'guest-late', displayName: 'Late' }));
+    await receive(page, 'lobby:state', {
+      lobbyState: hostLobby({
+        red: ['host-1', 'Johnny'], blue: ['guest-7', 'Lee'], white: ['guest-8', 'Ana'],
+      }, 3),
+    });
+    await expect(page.getByTestId('lobby-full')).toBeVisible();
+    await expect(page.getByTestId('lobby-full')).toContainText('Lobby is full');
+    await expect(page.getByTestId('color-picker')).toHaveCount(0);
+    const state = await getTestState(page);
+    expect(state.lobbyFull).toBe(true);
+    expect(state.viewerId).toBeNull();
+    expect((await outbound(page)).some((message) => message.type === 'seat:claim')).toBe(false);
+    await expect(page.getByTestId('lobby-full-new')).toHaveAttribute('href', '/');
+
+    await page.getByTestId('lobby-full-retry').click();
+    await expect(page.getByTestId('lobby-join')).toBeVisible();
+    await expect(page.getByTestId('lobby-full')).toHaveCount(0);
+  });
+});
+
+test('host shares an invite link and validates racing color claims', async ({ page }) => {
+  await page.goto('/');
+  await waitForTestApi(page);
+  await page.evaluate(() => window.__CATAN_TEST_API.simulateRoomConnection({
+    participantId: 'host-1', displayName: 'Johnny', isRoomCreator: true, roomName: 'catan-table-host',
+  }));
+  await expect(page.getByTestId('host-lobby')).toBeVisible();
+  await expect(page.getByTestId('invite-url')).toHaveValue(/\?room=catan-table-host$/);
+  await page.getByTestId('copy-invite-link').click();
+  await expect(page.getByTestId('copy-invite-link')).toContainText('Copied!');
+  await expect(page.getByTestId('pick-color-red')).toHaveAttribute('data-status', 'mine');
+  await expect(page.getByTestId('start-game')).toBeDisabled();
+
+  const claim = (participantId, playerId, displayName) => page.evaluate((args) => {
+    window.__CATAN_TEST_API.receiveMultiplayerMessage(
+      { type: 'seat:claim', payload: { playerId: args.playerId, participantId: args.participantId, displayName: args.displayName } },
+      { participantId: args.participantId, displayName: args.displayName },
+    );
+  }, { participantId, playerId, displayName });
+
+  // Two guests pick Blue at nearly the same time: the first claim to arrive wins.
+  await claim('guest-a', 'blue', 'Ann');
+  await expect.poll(async () => (await getTestState(page)).lobbyState.seats.find((seat) => seat.playerId === 'blue').claimedBy).toBe('guest-a');
+  await claim('guest-b', 'blue', 'Bob');
+  await expect.poll(async () => (await page.evaluate(() => window.__CATAN_TEST_API.getOutboundMessages()))
+    .filter((message) => message.type === 'seat:claimResult').map((message) => message.payload))
+    .toEqual([
+      { to: 'guest-a', ok: true, playerId: 'blue' },
+      { to: 'guest-b', ok: false, playerId: 'blue', reason: 'taken', takenBy: 'Ann' },
+    ]);
+  const seats = (await getTestState(page)).lobbyState.seats;
+  expect(seats.find((seat) => seat.playerId === 'blue').claimedBy).toBe('guest-a');
+  expect(seats.some((seat) => seat.claimedBy === 'guest-b')).toBe(false);
+  await expect(page.getByTestId('pick-color-blue')).toHaveAttribute('data-status', 'taken');
+  await expect(page.getByTestId('pick-color-blue')).toContainText('Ann');
 });

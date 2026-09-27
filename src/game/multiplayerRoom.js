@@ -16,6 +16,7 @@ export const MULTIPLAYER_MESSAGE_TYPES = {
   HELLO: 'lobby:hello',
   LOBBY_STATE: 'lobby:state',
   CLAIM_SEAT: 'seat:claim',
+  CLAIM_RESULT: 'seat:claimResult',
   RELEASE_SEAT: 'seat:release',
   GAME_START: 'game:start',
   GAME_SNAPSHOT: 'game:snapshot',
@@ -105,6 +106,56 @@ export function claimSeat(lobbyState, { playerId, participantId, displayName }) 
     spectators: lobbyState.spectators.filter((spectator) => spectator.participantId !== participantId),
     version: lobbyState.version + 1,
   };
+}
+
+export const SEAT_STATUS = {
+  MINE: 'mine',
+  OPEN: 'open',
+  TAKEN: 'taken',
+};
+
+/**
+ * How each seat looks to one participant. A seat whose owner disconnected
+ * counts as open, matching `claimSeat`, so a dropped lobby seat can be reused.
+ */
+export function getSeatAvailability(lobbyState, participantId) {
+  if (!lobbyState) return [];
+  return lobbyState.seats.map((seat) => {
+    let status = SEAT_STATUS.OPEN;
+    if (participantId && seat.claimedBy === participantId) status = SEAT_STATUS.MINE;
+    else if (seat.claimedBy && seat.connected) status = SEAT_STATUS.TAKEN;
+    return { ...seat, status };
+  });
+}
+
+/** True when a participant without a seat has no color left to pick in the lobby. */
+export function isLobbyFull(lobbyState, participantId) {
+  if (!lobbyState || lobbyState.room.status !== ROOM_STATUS.LOBBY) return false;
+  const seats = getSeatAvailability(lobbyState, participantId);
+  if (seats.some((seat) => seat.status === SEAT_STATUS.MINE)) return false;
+  return !seats.some((seat) => seat.status === SEAT_STATUS.OPEN);
+}
+
+/**
+ * Host-side validation of a color claim. The host applies claims in the order
+ * they arrive, so when two people pick the same color the first claim wins and
+ * the second gets `{ ok: false, reason: 'taken' }` and is asked to pick again.
+ */
+export function resolveSeatClaim(lobbyState, { playerId, participantId, displayName }) {
+  const reject = (reason, extra = {}) => ({ lobbyState, result: { ok: false, playerId, reason, ...extra } });
+  if (!participantId) return reject('unknown-participant');
+  if (lobbyState.room.status !== ROOM_STATUS.LOBBY) return reject('started');
+  const target = lobbyState.seats.find((seat) => seat.playerId === playerId);
+  if (!target) {
+    return reject(isLobbyFull(lobbyState, participantId) ? 'full' : 'unknown-seat');
+  }
+  if (target.claimedBy && target.claimedBy !== participantId && target.connected) {
+    return reject(isLobbyFull(lobbyState, participantId) ? 'full' : 'taken', {
+      takenBy: target.displayName || target.label,
+    });
+  }
+  const next = claimSeat(lobbyState, { playerId, participantId, displayName });
+  return { lobbyState: next, result: { ok: true, playerId } };
 }
 
 export function releaseSeat(lobbyState, participantId) {

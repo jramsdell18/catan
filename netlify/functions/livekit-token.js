@@ -45,9 +45,11 @@ export async function handler(event) {
   const playerId = normalizeIdentity(payload.playerId);
   const participantIdentity = normalizeIdentity(payload.participantIdentity || playerId);
 
-  if (!roomName || !participantName || !participantIdentity || !playerId) {
+  // Colors are picked in the lobby after connecting (the host validates claims),
+  // so playerId is optional; older clients may still send one.
+  if (!roomName || !participantName || !participantIdentity) {
     return jsonResponse(400, {
-      error: 'roomName, participantName, and playerId are required.',
+      error: 'roomName, participantName, and participantIdentity are required.',
     });
   }
 
@@ -111,7 +113,7 @@ async function createLiveKitToken({
   roomName,
 }) {
   const secret = new TextEncoder().encode(apiSecret);
-  const metadata = JSON.stringify({ playerId });
+  const metadata = JSON.stringify(playerId ? { playerId } : {});
 
   return new SignJWT({
     name: participantName,
