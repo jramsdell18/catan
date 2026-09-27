@@ -183,6 +183,8 @@ Seeded random board: 18 number tokens with official counts, no 7, red numbers (6
 
 **DOM hooks:** Prefer `data-testid` (e.g. `start-game`, `engine-phase`, `status-message`) over CSS class names.
 
+**Join-flow hooks (DEV only):** `__CATAN_TEST_API.simulateRoomConnection({ participantId, displayName, isRoomCreator })` pretends this tab joined a LiveKit room, `receiveMultiplayerMessage(message, sender)` feeds host/guest messages (`lobby:state`, `seat:claim`, `seat:claimResult`), and `getOutboundMessages()` returns what the tab sent. Lobby test ids: `lobby-join`, `host-lobby`, `copy-invite-link`, `color-picker`, `pick-color-<id>` (`data-status` = open/taken/mine), `claim-notice`, `lobby-full`. Gear menu: `settings-toggle`, `settings-menu`, `settings-bots`, `settings-start-solo`.
+
 ---
 
 ## Running tests individually (debugging)
