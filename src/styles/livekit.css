@@ -149,3 +149,31 @@
   .table-video-bubble { width: 7.3125rem; border-width: 6px; }
   .table-video-stats { min-width: 3.2rem; padding: 0.34rem; font-size: 0.68rem; }
 }
+
+/* Phones and short viewports: compact, scrollable stream panel that stays on screen. */
+@media (max-width: 760px), (max-height: 560px) {
+  .livekit-call-widget {
+    top: max(0.55rem, env(safe-area-inset-top));
+    left: max(0.55rem, env(safe-area-inset-left));
+    width: min(20rem, calc(100% - 1.1rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-height: calc(100% - 1.1rem - env(safe-area-inset-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .livekit-join-panel,
+  .livekit-control-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+    gap: 0.4rem;
+    padding: 0.55rem;
+    font-size: 0.88rem;
+  }
+  .livekit-control-strip { width: auto; }
+  .livekit-control-heading { grid-column: 1 / -1; }
+  .livekit-join-panel label { font-size: 0.7rem; }
+  .livekit-join-panel input,
+  .livekit-join-panel select { min-height: 36px; padding: 0.4rem 0.55rem; }
+  .livekit-join-panel button,
+  .livekit-control-strip button { min-height: 36px; padding: 0.4rem 0.5rem; }
+  .livekit-status { font-size: 0.78rem; }
+}

@@ -7,7 +7,7 @@ React components present the game and report user intent. They do not decide whe
 | Area | Role |
 |------|------|
 | `CatanScene.jsx` | Owns the Three.js scene lifecycle and turns render props into the 3D table |
-| `StartGameOverlay.jsx` | Player count, local test-mode entry, seats, and game start |
+| `StartGameOverlay.jsx` | Player count, solo-bot and local test-mode entry, seats, and game start |
 | `GameControlPanel.jsx` | Composes the active-game controls and status surfaces |
 | `GameOverOverlay.jsx` | Winner, final state, restart, and new-game actions |
 | `game/*Controls.jsx` | Focused building, trading, development-card, robber, resource, and turn controls |

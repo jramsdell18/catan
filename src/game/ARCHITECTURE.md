@@ -27,6 +27,7 @@ flowchart LR
 | `topology.js` | Derives shared intersections and edges from hex geometry |
 | `rulesAdapter.js` | Converts the visual board into a rules board and engine state into render data |
 | `interactions.js` | Selects interaction modes, legal target IDs, commands, labels, and build availability |
+| `bots.js` | Test-only bots: pick a random legal command for setup, discards, and the robber; otherwise roll and end the turn |
 | `multiplayerRoom.js` | Current client-side lobby model, seats, roles, presence, and LiveKit message names |
 | `pieces.js` | Player colors and visible piece inventory helpers |
 | `setupFlow.js` | Setup-order presentation helpers |

@@ -489,3 +489,49 @@ test.describe('setup snake through production turn', () => {
     await expect(page.getByText('Bought this turn', { exact: true })).toBeVisible();
   });
 });
+
+test('solo bot mode: bots place, roll, and end turns automatically', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.goto('/');
+  await waitForTestApi(page);
+  await page.getByTestId('enable-solo-bots').click();
+  await expect(page.getByTestId('solo-bot-mode')).toBeVisible();
+  await page.getByTestId('player-count').selectOption('3');
+  await page.getByTestId('set-players').click();
+  await expect(page.getByTestId('player-setup-helper')).toContainText('You + 2 bots');
+  await page.getByTestId('start-game').click();
+
+  const state = await getTestState(page);
+  expect(state.soloBotMode).toBe(true);
+  expect(state.botPlayerIds).toEqual(['blue', 'white']);
+  expect(state.viewerId).toBe('red');
+
+  // The human places their own setup pieces; bots fill in the rest of the snake.
+  for (let placement = 0; placement < 2; placement += 1) {
+    await expect.poll(async () => {
+      const current = await getTestState(page);
+      return current.phase === 'setup' && current.currentPlayerId === 'red' && !current.setupSettlementId;
+    }, { timeout: 20000 }).toBe(true);
+    const beforeSettlement = await getTestState(page);
+    await page.evaluate((id) => window.__CATAN_TEST_API.placeSettlement(id), beforeSettlement.settlementOptions[0]);
+    await expect.poll(async () => (await getTestState(page)).setupSettlementId).not.toBeNull();
+    const beforeRoad = await getTestState(page);
+    await page.evaluate((id) => window.__CATAN_TEST_API.placeRoad(id), beforeRoad.roadOptions[0]);
+  }
+
+  await expect.poll(async () => (await getTestState(page)).phase, { timeout: 20000 }).toBe('roll');
+  const afterSetup = await getTestState(page);
+  expect(afterSetup.currentPlayerId).toBe('red');
+  expect(afterSetup.settlementCount).toBe(6);
+  expect(afterSetup.roadCount).toBe(6);
+
+  await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
+  await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+  await page.getByTestId('end-turn').click();
+
+  // Both bots roll and end their turns without input, returning control to the human.
+  await expect.poll(async () => {
+    const current = await getTestState(page);
+    return current.phase === 'roll' && current.currentPlayerId === 'red' && current.logLength >= 18;
+  }, { timeout: 20000 }).toBe(true);
+});

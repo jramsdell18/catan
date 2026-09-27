@@ -22,6 +22,7 @@ flowchart LR
 - **LiveKit Cloud** connects players for voice/video and currently transports lobby actions and game snapshots.
 - **The host browser** is the current game authority.
 - **Local test mode** runs the same rules locally without joining LiveKit and is available only in development builds.
+- **Solo test with bots** is available in every build (including Netlify): one person plays Red locally, without LiveKit, and the other seats are no-strategy test bots (`src/game/bots.js`).
 
 Known MVP limitations: host departure halts play for everyone, the complete game state — including hidden hands and deck order — crosses the LiveKit data channel, gameplay availability is coupled to LiveKit, and active games do not survive refreshes or restarts.
 

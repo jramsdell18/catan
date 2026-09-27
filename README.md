@@ -30,6 +30,12 @@ VITE_LIVEKIT_TOKEN_ENDPOINT=/.netlify/functions/livekit-token
 
 For local video-call testing, run the app through Netlify Dev so the function endpoint is available. Plain `npm run dev` still runs the board, but the LiveKit join button needs a reachable token endpoint.
 
+## Solo test with bots
+
+To test alone (locally or on the deployed Netlify site), select **Solo test with bots** on the Start Game panel, pick 3 or 4 players, and select **Start Game**. You play Red; every other seat is a bot. The game runs entirely in your browser, so no table call is needed.
+
+Bots are for testing only and have no strategy. After a short pause (about 0.5–1 second) a bot places its setup settlement and road on random legal spots, rolls on its turn, and ends its turn without building, trading, or playing cards. When a 7 is rolled, bots discard random cards and move the robber to a random hex, robbing a random eligible player. Select **Back to multiplayer** on the Start Game panel to leave solo mode.
+
 ## Test the rules integration
 
 1. Run `npm install`, then `npm run dev`.
