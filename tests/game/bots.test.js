@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRandomBoard } from '../../src/game/board.js';
-import { BOT_STEP_MAX_MS, BOT_STEP_MIN_MS, getBotAction, getBotDelay } from '../../src/game/bots.js';
+import { BOT_STEP_MAX_MS, BOT_STEP_MIN_MS, getBotAction, getBotDelay, getBotTradeResponse } from '../../src/game/bots.js';
 import { getActivePlayers } from '../../src/game/pieces.js';
 import { createBoardPorts, createRulesBoard } from '../../src/game/rulesAdapter.js';
 import { createBoardTopology } from '../../src/game/topology.js';
@@ -64,5 +64,32 @@ describe('test bots', () => {
       expect(player.pieces.roads).toBe(13);
       expect(player.developmentCards).toHaveLength(0);
     });
+  });
+
+  it('answers trade offers automatically: accept when affordable, otherwise decline', () => {
+    const { board, topology, playerIds } = createBotGame();
+    let { game } = createBotGame();
+    const random = seededRandom(5);
+    const allBots = new Set(playerIds);
+    while (game.phase === 'setup') game = applyAction(game, getBotAction({ game, topology, board, botPlayerIds: allBots, random }));
+    game = applyAction(game, { type: 'rollDice', playerId: 'red', dice: [1, 1] });
+    game = structuredClone(game);
+    game.players.find((player) => player.id === 'blue').resources.brick = 0;
+    game.players.find((player) => player.id === 'white').resources.brick = 3;
+    game = applyAction(game, {
+      type: 'offerTrade', playerId: 'red', toPlayerIds: ['white', 'blue'], give: { wood: 1 }, receive: { brick: 2 },
+    });
+    const botPlayerIds = new Set(['blue', 'white', 'orange']);
+
+    const first = getBotTradeResponse(game, botPlayerIds);
+    expect(first).toEqual({ type: 'rejectTrade', playerId: 'blue' });
+    game = applyAction(game, first);
+    const second = getBotAction({ game, topology, board, botPlayerIds });
+    expect(second).toEqual({ type: 'acceptTrade', playerId: 'white' });
+    game = applyAction(game, second);
+    expect(game.tradeOffer).toBeNull();
+    expect(game.lastTrade).toMatchObject({ type: 'accepted', toPlayerId: 'white', responses: { blue: 'declined', white: 'accepted' } });
+    // Nothing left to answer, and it is still the human's turn.
+    expect(getBotAction({ game, topology, board, botPlayerIds })).toBeNull();
   });
 });

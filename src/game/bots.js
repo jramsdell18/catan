@@ -42,12 +42,38 @@ export function createRandomDiscard(resources, amount, random = Math.random) {
   return discard;
 }
 
+function hasResources(resources, bundle) {
+  return Object.entries(bundle ?? {}).every(([resource, amount]) => (resources?.[resource] ?? 0) >= amount);
+}
+
+/**
+ * A bot that received a trade offer accepts when it can afford the request and
+ * declines otherwise, so offers sent to bots always get an answer.
+ */
+export function getBotTradeResponse(game, botPlayerIds) {
+  const offer = game?.tradeOffer;
+  if (!offer || game.phase !== 'action') return null;
+  const responder = game.players.find((player) =>
+    botPlayerIds.has(player.id) &&
+    player.id !== offer.fromPlayerId &&
+    offer.toPlayerIds?.includes(player.id) &&
+    offer.responses?.[player.id] !== 'declined',
+  );
+  if (!responder) return null;
+  const from = game.players.find((player) => player.id === offer.fromPlayerId);
+  const canTrade = hasResources(responder.resources, offer.receive) && hasResources(from?.resources, offer.give);
+  return { type: canTrade ? 'acceptTrade' : 'rejectTrade', playerId: responder.id };
+}
+
 /**
  * Returns the next rules action a bot should take, or null when no bot needs
  * to act (for example, it is a human's turn or a human still has to discard).
  */
 export function getBotAction({ game, topology, board, botPlayerIds, random = Math.random }) {
   if (!game || !botPlayerIds?.size || game.phase === 'gameOver') return null;
+
+  const tradeResponse = getBotTradeResponse(game, botPlayerIds);
+  if (tradeResponse) return tradeResponse;
 
   if (game.phase === 'discard') {
     const discarder = game.players.find((player) =>
@@ -90,6 +116,8 @@ export function getBotAction({ game, topology, board, botPlayerIds, random = Mat
   }
 
   if (game.phase === 'action') {
+    // A bot's own open offer (only created through test hooks) waits for the humans to answer.
+    if (game.tradeOffer?.fromPlayerId === game.currentPlayerId) return null;
     return { type: 'endTurn', playerId: game.currentPlayerId };
   }
 

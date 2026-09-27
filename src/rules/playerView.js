@@ -170,6 +170,8 @@ export function getPlayerView(game, viewerId) {
     playedDevelopmentThisTurn: state.playedDevelopmentThisTurn,
     pendingDiscards: state.pendingDiscards ?? {},
     tradeOffer: state.tradeOffer,
+    // Trade offers and outcomes are public table information.
+    lastTrade: state.lastTrade ?? null,
     longestRoadPlayerId: state.longestRoadPlayerId,
     largestArmyPlayerId: state.largestArmyPlayerId,
     winnerId: state.winnerId,

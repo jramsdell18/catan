@@ -628,3 +628,53 @@ describe('turns and victory', () => {
     expect(game.longestRoadPlayerId).toBe('p1');
   });
 });
+
+describe('multi-recipient domestic trades', () => {
+  function offerToMany(toPlayerIds) {
+    let game = setPhase(completeSetup(newGame(FOUR_PLAYERS), 4), 'action', 'p1');
+    game = giveResources(game, 'p1', { wood: 2 });
+    game = giveResources(game, 'p2', { brick: 1 });
+    game = giveResources(game, 'p3', { brick: 1 });
+    return applyAction(game, {
+      type: 'offerTrade', playerId: 'p1', toPlayerIds, give: { wood: 2 }, receive: { brick: 1 },
+    });
+  }
+
+  it('sends one offer to several players and records each decline', () => {
+    let game = offerToMany(['p2', 'p3']);
+    expect(game.tradeOffer.toPlayerIds).toEqual(['p2', 'p3']);
+    expect(() => applyAction(game, { type: 'acceptTrade', playerId: 'p4' })).toThrow(/No available/);
+
+    game = applyAction(game, { type: 'rejectTrade', playerId: 'p2' });
+    expect(game.tradeOffer.responses).toEqual({ p2: 'declined' });
+    expect(game.lastTrade).toMatchObject({ type: 'declined', playerId: 'p2' });
+    expect(() => applyAction(game, { type: 'acceptTrade', playerId: 'p2' })).toThrow(/No available/);
+
+    game = applyAction(game, { type: 'rejectTrade', playerId: 'p3' });
+    expect(game.tradeOffer).toBeNull();
+    expect(game.lastTrade).toMatchObject({ type: 'rejected', responses: { p2: 'declined', p3: 'declined' } });
+  });
+
+  it('completes on the first valid acceptance and closes the offer for everyone else', () => {
+    let game = offerToMany(['p2', 'p3']);
+    const p1WoodBefore = player(game, 'p1').resources.wood;
+    game = applyAction(game, { type: 'rejectTrade', playerId: 'p2' });
+    game = applyAction(game, { type: 'acceptTrade', playerId: 'p3' });
+    expect(game.tradeOffer).toBeNull();
+    expect(player(game, 'p1').resources.wood).toBe(p1WoodBefore - 2);
+    expect(game.lastTrade).toMatchObject({
+      type: 'accepted', fromPlayerId: 'p1', toPlayerId: 'p3', give: { wood: 2 }, receive: { brick: 1 },
+      responses: { p2: 'declined', p3: 'accepted' },
+    });
+    expect(() => applyAction(game, { type: 'acceptTrade', playerId: 'p2' })).toThrow(/No available/);
+  });
+
+  it('defaults to every opponent and rejects empty or invalid recipient lists', () => {
+    let game = setPhase(completeSetup(newGame(FOUR_PLAYERS), 4), 'action', 'p1');
+    game = giveResources(game, 'p1', { wood: 1 });
+    const offer = { type: 'offerTrade', playerId: 'p1', give: { wood: 1 }, receive: { brick: 1 } };
+    expect(applyAction(game, offer).tradeOffer.toPlayerIds).toEqual(['p2', 'p3', 'p4']);
+    expect(() => applyAction(game, { ...offer, toPlayerIds: [] })).toThrow(/at least one player/);
+    expect(() => applyAction(game, { ...offer, toPlayerIds: ['p2', 'p1'] })).toThrow(/another player/);
+  });
+});

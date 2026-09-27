@@ -333,25 +333,51 @@ function validateTradeBundle(bundle, label) {
   if (total < 1) throw new Error(`${label} bundle must contain at least one resource.`);
 }
 
+/** Recipients of a trade offer: explicit `toPlayerIds`, a legacy single `toPlayerId`, or every opponent. */
+function resolveTradeRecipients(state, action) {
+  const opponents = state.players.filter((player) => player.id !== action.playerId).map((player) => player.id);
+  let requested = null;
+  if (Array.isArray(action.toPlayerIds)) requested = action.toPlayerIds;
+  else if (action.toPlayerId) requested = [action.toPlayerId];
+  if (!requested) return opponents;
+  if (!requested.length) throw new Error('Choose at least one player to trade with.');
+  const unique = [...new Set(requested)];
+  if (unique.some((id) => !opponents.includes(id))) throw new Error('Trade target must be another player.');
+  return unique;
+}
+
+export function isTradeRecipient(offer, playerId) {
+  return Boolean(offer && playerId && offer.fromPlayerId !== playerId && offer.toPlayerIds?.includes(playerId));
+}
+
 function offerTrade(state, action) {
   requireTurn(state, action.playerId);
   requirePhase(state, 'action');
   validateTradeBundle(action.give, 'Offered');
   validateTradeBundle(action.receive, 'Requested');
-  if (action.toPlayerId && (!playerById(state, action.toPlayerId) || action.toPlayerId === action.playerId)) {
-    throw new Error('Trade target must be another player.');
-  }
+  const toPlayerIds = resolveTradeRecipients(state, action);
   if (!hasResources(currentPlayer(state), action.give)) throw new Error('Offering player lacks those resources.');
-  state.tradeOffer = { fromPlayerId: action.playerId, toPlayerId: action.toPlayerId ?? null, give: copy(action.give), receive: copy(action.receive) };
-  state.lastTrade = { type: 'offered', playerId: action.playerId };
+  state.tradeOffer = {
+    fromPlayerId: action.playerId,
+    toPlayerIds,
+    give: copy(action.give),
+    receive: copy(action.receive),
+    responses: {},
+  };
+  state.lastTrade = { type: 'offered', playerId: action.playerId, toPlayerIds: [...toPlayerIds] };
+}
+
+function requireOpenRecipient(offer, playerId, message) {
+  if (!isTradeRecipient(offer, playerId) || offer.responses?.[playerId] === 'declined') throw new Error(message);
 }
 
 function acceptTrade(state, action) {
   requirePhase(state, 'action');
   const offer = state.tradeOffer;
-  if (!offer || (offer.toPlayerId && offer.toPlayerId !== action.playerId) || offer.fromPlayerId === action.playerId) throw new Error('No available trade offer.');
+  requireOpenRecipient(offer, action.playerId, 'No available trade offer.');
   const from = playerById(state, offer.fromPlayerId);
   const to = playerById(state, action.playerId);
+  // The first valid acceptance wins; both hands are rechecked at this moment.
   if (!hasResources(from, offer.give) || !hasResources(to, offer.receive)) throw new Error('A player no longer has the offered resources.');
   for (const resource of RESOURCE_TYPES) {
     const given = offer.give[resource] ?? 0;
@@ -360,25 +386,43 @@ function acceptTrade(state, action) {
     to.resources[resource] += given - received;
   }
   state.tradeOffer = null;
-  state.lastTrade = { type: 'accepted', fromPlayerId: offer.fromPlayerId, toPlayerId: action.playerId };
+  state.lastTrade = {
+    type: 'accepted',
+    fromPlayerId: offer.fromPlayerId,
+    toPlayerId: action.playerId,
+    toPlayerIds: [...offer.toPlayerIds],
+    give: copy(offer.give),
+    receive: copy(offer.receive),
+    responses: { ...offer.responses, [action.playerId]: 'accepted' },
+  };
 }
 
 function cancelTrade(state, action) {
   requireTurn(state, action.playerId);
   requirePhase(state, 'action');
   if (!state.tradeOffer || state.tradeOffer.fromPlayerId !== action.playerId) throw new Error('Only the offering player can cancel this trade.');
+  state.lastTrade = { type: 'cancelled', playerId: action.playerId, responses: { ...state.tradeOffer.responses } };
   state.tradeOffer = null;
-  state.lastTrade = { type: 'cancelled', playerId: action.playerId };
 }
 
 function rejectTrade(state, action) {
   requirePhase(state, 'action');
   const offer = state.tradeOffer;
-  if (!offer || offer.fromPlayerId === action.playerId || (offer.toPlayerId && offer.toPlayerId !== action.playerId)) {
-    throw new Error('This player cannot reject the trade.');
+  requireOpenRecipient(offer, action.playerId, 'This player cannot reject the trade.');
+  offer.responses = { ...offer.responses, [action.playerId]: 'declined' };
+  const everyoneDeclined = offer.toPlayerIds.every((id) => offer.responses[id] === 'declined');
+  if (everyoneDeclined) {
+    state.tradeOffer = null;
+    state.lastTrade = {
+      type: 'rejected',
+      playerId: action.playerId,
+      fromPlayerId: offer.fromPlayerId,
+      toPlayerIds: [...offer.toPlayerIds],
+      responses: { ...offer.responses },
+    };
+  } else {
+    state.lastTrade = { type: 'declined', playerId: action.playerId, fromPlayerId: offer.fromPlayerId };
   }
-  state.tradeOffer = null;
-  state.lastTrade = { type: 'rejected', playerId: action.playerId, fromPlayerId: offer.fromPlayerId };
 }
 
 function endTurn(state, action) {

@@ -258,10 +258,11 @@ test.describe('setup snake through production turn', () => {
     await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
     await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
 
-    // Compact controls keep R/S/C shorthand; costs stay discoverable via the stable accessible name.
-    await expect(page.getByTestId('build-road')).toHaveText('R');
-    await expect(page.getByTestId('build-settlement')).toHaveText('S');
-    await expect(page.getByTestId('build-city')).toHaveText('C');
+    // Board-overlay controls are icon-only; costs stay discoverable via the stable accessible name.
+    for (const kind of ['road', 'settlement', 'city']) {
+      await expect(page.getByTestId(`build-${kind}`).locator('svg')).toHaveCount(1);
+      await expect(page.getByTestId(`build-${kind}`)).toHaveText('');
+    }
     await expect(page.getByTestId('build-road')).toHaveAccessibleName('Build road: 1 brick + 1 wood');
     await expect(page.getByTestId('build-settlement')).toHaveAccessibleName('Build settlement: 1 brick + 1 wood + 1 hay + 1 sheep');
     await expect(page.getByTestId('build-city')).toHaveAccessibleName('Build city: 3 ore + 2 hay');
@@ -370,7 +371,7 @@ test.describe('setup snake through production turn', () => {
     expect(viewAfterRob.players.find((player) => player.id === 'red').hasResourceBreakdown).toBe(true);
   });
 
-  test('completes maritime and domestic trade workflows', async ({ page }) => {
+  test('completes bank and multi-recipient player trades through the swap-icon flow', async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto('/');
     await waitForTestApi(page);
@@ -382,37 +383,78 @@ test.describe('setup snake through production turn', () => {
     await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', { sheep: 4, wood: 2 }));
     await page.evaluate(() => window.__CATAN_TEST_API.giveResources('blue', { brick: 2 }));
 
+    // Bank / port trade.
+    await expect(page.getByTestId('toggle-trades')).toHaveAccessibleName('Trade resources');
     await page.getByTestId('toggle-trades').click();
-    await page.getByTestId('maritime-give').selectOption('sheep');
-    await page.getByTestId('maritime-receive').selectOption('ore');
-    const maritimeButton = page.getByTestId('maritime-trade').getByRole('button', { name: /Trade \d for 1/ });
-    const ratio = Number((await maritimeButton.innerText()).match(/\d+/)[0]);
+    await page.getByTestId('trade-bank').click();
+    await page.getByTestId('trade-bank-give-sheep').click();
+    await page.getByTestId('trade-bank-get-ore').click();
+    const bankButton = page.getByTestId('trade-bank-confirm');
+    const ratio = Number((await bankButton.innerText()).match(/\d+/)[0]);
     const beforeMaritime = await getTestState(page);
-    await maritimeButton.click();
+    await bankButton.click();
     await expect.poll(async () => (await getTestState(page)).resources.red.ore).toBe(beforeMaritime.resources.red.ore + 1);
     const afterMaritime = await getTestState(page);
     expect(afterMaritime.resources.red.sheep).toBe(beforeMaritime.resources.red.sheep - ratio);
+    await expect(page.getByTestId('trade-flow')).toHaveCount(0);
 
-    await page.getByTestId('trade-target').selectOption('blue');
-    await page.getByTestId('trade-give-wood').fill('1');
-    await page.getByTestId('trade-receive-brick').fill('1');
+    // Quantities: each tap adds one, capped at what the player owns; minus removes one.
+    await page.getByTestId('toggle-trades').click();
+    const ownedWood = afterMaritime.resources.red.wood;
+    for (let tap = 0; tap < ownedWood; tap += 1) await page.getByTestId('trade-give-wood').click();
+    await expect(page.getByTestId('trade-give-wood-count')).toHaveText(String(ownedWood));
+    await expect(page.getByTestId('trade-give-wood')).toBeDisabled();
+    for (let tap = 1; tap < ownedWood; tap += 1) await page.getByTestId('trade-give-wood-minus').click();
+    await expect(page.getByTestId('trade-give-wood-count')).toHaveText('1');
+    await expect(page.getByTestId('trade-next')).toBeDisabled();
+    await page.getByTestId('trade-get-brick').click();
+    await page.getByTestId('trade-next').click();
+
+    // Recipient multi-select with an "All players" shortcut and public hand counts.
+    await expect(page.getByTestId('trade-hand-count-blue')).toContainText('cards');
+    await page.getByTestId('trade-recipient-all').click();
+    await expect(page.getByTestId('trade-recipient-blue')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('trade-recipient-white')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('trade-recipient-white').click();
+    await expect(page.getByTestId('trade-recipient-white')).toHaveAttribute('aria-pressed', 'false');
     const beforeDomestic = await getTestState(page);
     await page.getByTestId('offer-trade').click();
     await expect(page.getByTestId('pending-trade')).toBeVisible();
+    expect((await getTestState(page)).tradeOffer.toPlayerIds).toEqual(['blue']);
     await page.getByTestId('accept-trade-blue').click();
-    await expect(page.getByTestId('pending-trade')).toBeHidden();
+    await expect(page.getByTestId('trade-result')).toHaveAttribute('data-result', 'accepted');
     const afterDomestic = await getTestState(page);
     expect(afterDomestic.resources.red.wood).toBe(beforeDomestic.resources.red.wood - 1);
     expect(afterDomestic.resources.red.brick).toBe(beforeDomestic.resources.red.brick + 1);
     expect(afterDomestic.resources.blue.wood).toBe(beforeDomestic.resources.blue.wood + 1);
     expect(afterDomestic.resources.blue.brick).toBe(beforeDomestic.resources.blue.brick - 1);
+    await page.getByTestId('trade-done').click();
+    await expect(page.getByTestId('trade-flow')).toHaveCount(0);
 
-    await page.getByTestId('offer-trade').click();
+    async function sendOfferToAll() {
+      await page.getByTestId('toggle-trades').click();
+      await page.getByTestId('trade-give-wood').click();
+      await page.getByTestId('trade-get-brick').click();
+      await page.getByTestId('trade-next').click();
+      await page.getByTestId('trade-recipient-all').click();
+      await page.getByTestId('offer-trade').click();
+      await expect(page.getByTestId('pending-trade')).toBeVisible();
+    }
+
+    // Each recipient's decline is shown to the sender; the offer closes when everyone declines.
+    await sendOfferToAll();
     await page.getByTestId('reject-trade-blue').click();
-    await expect(page.getByTestId('pending-trade')).toBeHidden();
-    await page.getByTestId('offer-trade').click();
+    await expect(page.getByTestId('trade-response-blue')).toHaveAttribute('data-response', 'declined');
+    await expect(page.getByTestId('pending-trade')).toBeVisible();
+    await page.getByTestId('reject-trade-white').click();
+    await expect(page.getByTestId('trade-result')).toHaveAttribute('data-result', 'rejected');
+    await page.getByTestId('trade-done').click();
+
+    await sendOfferToAll();
     await page.getByTestId('cancel-trade').click();
-    await expect(page.getByTestId('pending-trade')).toBeHidden();
+    await expect(page.getByTestId('trade-result')).toHaveAttribute('data-result', 'cancelled');
+    await page.getByTestId('trade-done').click();
+    expect((await getTestState(page)).tradeOffer).toBeNull();
   });
 
   test('buys and plays every development card workflow', async ({ page }) => {
@@ -534,4 +576,75 @@ test('solo bot mode: bots place, roll, and end turns automatically', async ({ pa
     const current = await getTestState(page);
     return current.phase === 'roll' && current.currentPlayerId === 'red' && current.logLength >= 18;
   }, { timeout: 20000 }).toBe(true);
+});
+
+test('solo bot mode: bots answer offers, can propose to the human, and actions show toasts', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto('/');
+  await waitForTestApi(page);
+  await page.getByTestId('enable-solo-bots').click();
+  await page.getByTestId('player-count').selectOption('3');
+  await page.getByTestId('set-players').click();
+  await page.getByTestId('start-game').click();
+
+  for (let placement = 0; placement < 2; placement += 1) {
+    await expect.poll(async () => {
+      const current = await getTestState(page);
+      return current.phase === 'setup' && current.currentPlayerId === 'red' && !current.setupSettlementId;
+    }, { timeout: 20000 }).toBe(true);
+    const beforeSettlement = await getTestState(page);
+    await page.evaluate((id) => window.__CATAN_TEST_API.placeSettlement(id), beforeSettlement.settlementOptions[0]);
+    if (placement === 0) {
+      // A colour-coded toast appears for the action, then fades away on its own.
+      const toast = page.getByTestId('game-toast').filter({ hasText: 'Red placed a settlement' });
+      await expect(toast).toBeVisible();
+      await expect(toast).toHaveAttribute('data-player-id', 'red');
+      await expect(toast).toHaveCount(0, { timeout: 6000 });
+    }
+    await expect.poll(async () => (await getTestState(page)).setupSettlementId).not.toBeNull();
+    const beforeRoad = await getTestState(page);
+    await page.evaluate((id) => window.__CATAN_TEST_API.placeRoad(id), beforeRoad.roadOptions[0]);
+  }
+  await expect.poll(async () => (await getTestState(page)).phase, { timeout: 20000 }).toBe('roll');
+  await page.evaluate(() => window.__CATAN_TEST_API.rollDice([2, 3]));
+  await expect.poll(async () => (await getTestState(page)).phase).toBe('action');
+  await page.evaluate(() => window.__CATAN_TEST_API.giveResources('red', { wood: 3 }));
+
+  // Offer to every bot: bots that cannot pay decline automatically; a bot that can pay accepts.
+  await page.getByTestId('toggle-trades').click();
+  await page.getByTestId('trade-give-wood').click();
+  for (let tap = 0; tap < 5; tap += 1) await page.getByTestId('trade-get-ore').click();
+  await page.getByTestId('trade-next').click();
+  await page.getByTestId('trade-recipient-all').click();
+  await page.getByTestId('offer-trade').click();
+  await expect(page.getByTestId('trade-result')).toHaveAttribute('data-result', 'rejected', { timeout: 10000 });
+  await expect(page.getByTestId('trade-result')).toContainText('Declined: Blue (bot), White (bot)');
+  await page.getByTestId('trade-done').click();
+
+  await page.getByTestId('toggle-trades').click();
+  await page.getByTestId('trade-give-wood').click();
+  await page.getByTestId('trade-get-sheep').click();
+  await page.getByTestId('trade-next').click();
+  await page.getByTestId('trade-recipient-all').click();
+  await page.getByTestId('offer-trade').click();
+  await expect(page.getByTestId('trade-result')).toHaveAttribute('data-result', 'accepted', { timeout: 10000 });
+  expect((await getTestState(page)).lastTrade).toMatchObject({ fromPlayerId: 'red', toPlayerId: 'blue' });
+  await expect(page.getByTestId('game-toast').filter({ hasText: 'Red traded with Blue (bot)' })).toBeVisible();
+  await page.getByTestId('trade-done').click();
+
+  // A bot proposes to the human, who sees Accept/Decline on their own screen.
+  // Keep the human under the discard limit so a bot's 7 cannot pause the flow.
+  const handBefore = (await getTestState(page)).resources.red;
+  await page.evaluate((hand) => window.__CATAN_TEST_API.giveResources('red', Object.fromEntries(
+    Object.entries(hand).map(([resource, amount]) => [resource, (resource === 'wood' ? 1 : 0) - amount]),
+  )), handBefore);
+  await page.evaluate(() => window.__CATAN_TEST_API.queueBotTradeOffer({ ore: 1 }, { wood: 1 }));
+  await page.getByTestId('end-turn').click();
+  await expect(page.getByTestId('incoming-trade')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId('incoming-trade')).toContainText('Blue (bot) wants to trade');
+  await page.getByTestId('reject-trade-red').click();
+  await expect(page.getByTestId('incoming-trade')).toHaveCount(0);
+  expect((await getTestState(page)).lastTrade).toMatchObject({ type: 'rejected', playerId: 'red', fromPlayerId: 'blue' });
+  // The bot carries on with its turn after the answer.
+  await expect.poll(async () => (await getTestState(page)).currentPlayerId, { timeout: 15000 }).not.toBe('blue');
 });

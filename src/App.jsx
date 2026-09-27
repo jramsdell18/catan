@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CatanScene from './components/CatanScene.jsx';
 import GameControlPanel from './components/game/GameControlPanel.jsx';
 import StartGameOverlay from './components/game/StartGameOverlay.jsx';
 import GameOverOverlay from './components/game/GameOverOverlay.jsx';
 import { createRandomBoard } from './game/board.js';
 import { getBotAction, getBotDelay } from './game/bots.js';
+import { createToastsFromLog, MAX_TOASTS } from './game/toasts.js';
 import { getActivePlayers } from './game/pieces.js';
 import {
   actionForTarget,
@@ -71,20 +72,12 @@ function getSimulatedTradeAcceptance(game, simulatedPlayerIds) {
   const offer = game?.tradeOffer;
   if (!offer || game.phase !== 'action') return null;
 
-  return game.players
+  const acceptor = game.players
     .filter((player) => simulatedPlayerIds.has(player.id))
     .filter((player) => player.id !== offer.fromPlayerId)
-    .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
-    .find((player) => hasResources(player.resources, offer.receive))
-    ? {
-        type: 'acceptTrade',
-        playerId: game.players
-          .filter((player) => simulatedPlayerIds.has(player.id))
-          .filter((player) => player.id !== offer.fromPlayerId)
-          .filter((player) => !offer.toPlayerId || offer.toPlayerId === player.id)
-          .find((player) => hasResources(player.resources, offer.receive)).id,
-      }
-    : null;
+    .filter((player) => offer.toPlayerIds?.includes(player.id) && offer.responses?.[player.id] !== 'declined')
+    .find((player) => hasResources(player.resources, offer.receive));
+  return acceptor ? { type: 'acceptTrade', playerId: acceptor.id } : null;
 }
 
 function getSimulationAction({ game, topology, board, simulatedPlayerIds }) {
@@ -115,6 +108,9 @@ function App() {
   const [localTestMode, setLocalTestMode] = useState(false);
   const [simulateOpponents, setSimulateOpponents] = useState(false);
   const [soloBotMode, setSoloBotMode] = useState(false);
+  const [queuedBotOffer, setQueuedBotOffer] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const toastLogLengthRef = useRef(0);
 
   const activePlayerCount = confirmedPlayers ?? selectedPlayers;
   const activePlayers = useMemo(() => getActivePlayers(activePlayerCount), [activePlayerCount]);
@@ -338,7 +334,10 @@ function App() {
   const requestOrDispatch = useCallback((action) => {
     // In solo bot mode the human may discard while a bot's roll is being resolved.
     const isSoloDiscard = isSoloBotMode && action.type === 'discard' && action.playerId === soloHumanPlayerId;
-    if (!isViewerTurn && !isSoloDiscard) {
+    // Trade recipients answer offers on their own screen, outside their turn.
+    const isTradeResponse = (action.type === 'acceptTrade' || action.type === 'rejectTrade') &&
+      action.playerId === viewerId && Boolean(game?.tradeOffer?.toPlayerIds?.includes(viewerId));
+    if (!isViewerTurn && !isSoloDiscard && !isTradeResponse) {
       setGameError('It is not your turn.');
       setActionFeedback({ status: 'error', message: 'It is not your turn.' });
       return;
@@ -363,8 +362,8 @@ function App() {
     sendRoomMessage(MULTIPLAYER_MESSAGE_TYPES.ACTION_REQUEST, { action });
     setActionFeedback({ status: 'pending', message: `Requested: ${describeAction(action.type)}.` });
   }, [
-    dispatchLocal, isHost, isLiveRoomConnected, isLocalMode, isSoloBotMode, isViewerTurn,
-    sendRoomMessage, soloHumanPlayerId,
+    dispatchLocal, game?.tradeOffer, isHost, isLiveRoomConnected, isLocalMode, isSoloBotMode, isViewerTurn,
+    sendRoomMessage, soloHumanPlayerId, viewerId,
   ]);
 
   const cancelInteraction = useCallback(() => {
@@ -750,8 +749,37 @@ function App() {
     return () => window.clearInterval(interval);
   }, [isHost, isLiveRoomConnected, lastHostHeartbeatAt, lobbyState]);
 
+  // Toasts come from new rules-log entries, so every client and every bot turn produces them.
+  useEffect(() => {
+    const previous = toastLogLengthRef.current;
+    const length = game?.log.length ?? 0;
+    toastLogLengthRef.current = length;
+    const next = createToastsFromLog(game, previous);
+    if (next.length) setToasts((current) => [...current, ...next].slice(-MAX_TOASTS));
+  }, [game]);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
   useEffect(() => {
     if (!isSoloBotMode || !game) return undefined;
+    // Dev test hook: a bot proposes a queued trade to the human during its action phase.
+    if (
+      queuedBotOffer && game.phase === 'action' && botPlayerIds.has(game.currentPlayerId) && !game.tradeOffer
+    ) {
+      const offerAction = {
+        type: 'offerTrade',
+        playerId: game.currentPlayerId,
+        toPlayerIds: [soloHumanPlayerId],
+        give: queuedBotOffer.give,
+        receive: queuedBotOffer.receive,
+      };
+      setQueuedBotOffer(null);
+      const actorLabel = game.players.find((player) => player.id === game.currentPlayerId)?.name;
+      dispatchLocal(offerAction, { actorLabel });
+      return undefined;
+    }
     const action = getBotAction({ game, topology, board, botPlayerIds });
     if (!action) return undefined;
     const actorLabel = game.players.find((player) => player.id === action.playerId)?.name;
@@ -762,7 +790,7 @@ function App() {
     }, getBotDelay());
 
     return () => window.clearTimeout(timeout);
-  }, [board, botPlayerIds, dispatchLocal, game, isSoloBotMode, topology]);
+  }, [board, botPlayerIds, dispatchLocal, game, isSoloBotMode, queuedBotOffer, soloHumanPlayerId, topology]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !simulateOpponents || !game || isSoloBotMode) return undefined;
@@ -841,6 +869,9 @@ function App() {
         localTestMode: isLocalTestMode,
         soloBotMode: isSoloBotMode,
         botPlayerIds: [...botPlayerIds],
+        tradeOffer: game?.tradeOffer ?? null,
+        lastTrade: game?.lastTrade ?? null,
+        toasts: toasts.map((toast) => toast.message),
         simulateOpponents,
         lobbyState,
         resources: game
@@ -920,6 +951,7 @@ function App() {
           return next;
         });
       },
+      queueBotTradeOffer: (give, receive) => setQueuedBotOffer({ give, receive }),
       rollDice: (dice) => {
         if (game?.phase !== 'roll') return;
         const values = dice ?? [rollDie(), rollDie()];
@@ -935,7 +967,7 @@ function App() {
     placementOptions.roads, placementOptions.settlements, placements.cities.length,
     placements.roads.length, placements.settlements.length, playerInventories, playerView,
     productionCandidates, requestOrDispatch, selectedRoadBuildingEdges, selectedRobberTileId,
-    isSoloBotMode, simulateOpponents, topology, viewerId, viewerRole,
+    isSoloBotMode, simulateOpponents, toasts, topology, viewerId, viewerRole,
   ]);
 
   return (
@@ -1002,63 +1034,65 @@ function App() {
           />
         )}
         <GameOverOverlay playerView={playerView} onRestart={handleRestartGame} onNewGame={handleNewGame} />
+        <GameControlPanel
+          game={game}
+          playerView={playerView}
+          viewerId={viewerId}
+          sharedDeviceMode={sharedDeviceMode}
+          playerMessage={playerMessage}
+          diceTotal={diceTotal}
+          gameError={gameError}
+          interactionMode={interactionMode}
+          requestedMode={requestedMode}
+          onCancelInteraction={cancelInteraction}
+          actionFeedback={actionFeedback}
+          confirmedPlayers={confirmedPlayers}
+          buildAvailability={buildAvailability}
+          onRollDice={handleRollDice}
+          onEndTurn={() => game && requestOrDispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
+          onSelectMode={setRequestedMode}
+          onResetCamera={() => setCameraResetKey((key) => key + 1)}
+          onStartGame={game ? handleRestartGame : handleStartGame}
+          boardSeed={board.seed}
+          currentPlayer={currentPlayer}
+          selectedRobberTileId={selectedRobberTileId}
+          eligibleRobberVictims={eligibleRobberVictims}
+          onDiscard={(playerId, resources) => requestOrDispatch({ type: 'discard', playerId, resources })}
+          onSelectVictim={(victimId) => requestOrDispatch({
+            type: 'moveRobber',
+            playerId: game.currentPlayerId,
+            tileId: selectedRobberTileId,
+            victimId,
+          })}
+          onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
+          onTradeAction={requestOrDispatch}
+          viewerRole={viewerRole}
+          isViewerTurn={isViewerTurn}
+          isHost={isHost}
+          canStartGame={canStartGame}
+          lobbyState={lobbyState}
+          onDevelopmentAction={requestOrDispatch}
+          selectedRoadBuildingEdges={selectedRoadBuildingEdges}
+          onBeginRoadBuilding={() => {
+            setSelectedRoadBuildingEdges([]);
+            setRequestedMode(INTERACTION_MODES.ROAD_BUILDING);
+          }}
+          onFinishRoadBuilding={() => requestOrDispatch({
+            type: 'playDevelopment',
+            playerId: game.currentPlayerId,
+            card: 'roadBuilding',
+            edgeIds: selectedRoadBuildingEdges,
+          })}
+          onCancelRoadBuilding={cancelInteraction}
+          simulateOpponents={simulateOpponents}
+          onToggleSimulation={setSimulateOpponents}
+          onLoadTestBoard={handleLoadTestBoard}
+          onRollChosenDice={handleChosenDice}
+          toasts={toasts}
+          onDismissToast={dismissToast}
+        />
       </section>
 
-      <GameControlPanel
-        game={game}
-        playerView={playerView}
-        viewerId={viewerId}
-        sharedDeviceMode={sharedDeviceMode}
-        playerMessage={playerMessage}
-        diceTotal={diceTotal}
-        gameError={gameError}
-        interactionMode={interactionMode}
-        requestedMode={requestedMode}
-        onCancelInteraction={cancelInteraction}
-        actionFeedback={actionFeedback}
-        confirmedPlayers={confirmedPlayers}
-        buildAvailability={buildAvailability}
-        onRollDice={handleRollDice}
-        onEndTurn={() => game && requestOrDispatch({ type: 'endTurn', playerId: game.currentPlayerId })}
-        onSelectMode={setRequestedMode}
-        onResetCamera={() => setCameraResetKey((key) => key + 1)}
-        onStartGame={game ? handleRestartGame : handleStartGame}
-        boardSeed={board.seed}
-        currentPlayer={currentPlayer}
-        selectedRobberTileId={selectedRobberTileId}
-        eligibleRobberVictims={eligibleRobberVictims}
-        onDiscard={(playerId, resources) => requestOrDispatch({ type: 'discard', playerId, resources })}
-        onSelectVictim={(victimId) => requestOrDispatch({
-          type: 'moveRobber',
-          playerId: game.currentPlayerId,
-          tileId: selectedRobberTileId,
-          victimId,
-        })}
-        onChooseDifferentRobberHex={() => setSelectedRobberTileId(null)}
-        onTradeAction={requestOrDispatch}
-        viewerRole={viewerRole}
-        isViewerTurn={isViewerTurn}
-        isHost={isHost}
-        canStartGame={canStartGame}
-        lobbyState={lobbyState}
-        onDevelopmentAction={requestOrDispatch}
-        selectedRoadBuildingEdges={selectedRoadBuildingEdges}
-        onBeginRoadBuilding={() => {
-          setSelectedRoadBuildingEdges([]);
-          setRequestedMode(INTERACTION_MODES.ROAD_BUILDING);
-        }}
-        onFinishRoadBuilding={() => requestOrDispatch({
-          type: 'playDevelopment',
-          playerId: game.currentPlayerId,
-          card: 'roadBuilding',
-          edgeIds: selectedRoadBuildingEdges,
-        })}
-        onCancelRoadBuilding={cancelInteraction}
-        simulateOpponents={simulateOpponents}
-        onToggleSimulation={setSimulateOpponents}
-        onLoadTestBoard={handleLoadTestBoard}
-        onRollChosenDice={handleChosenDice}
-      />
     </main>
   );
 }

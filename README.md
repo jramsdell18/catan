@@ -34,7 +34,13 @@ For local video-call testing, run the app through Netlify Dev so the function en
 
 To test alone (locally or on the deployed Netlify site), select **Solo test with bots** on the Start Game panel, pick 3 or 4 players, and select **Start Game**. You play Red; every other seat is a bot. The game runs entirely in your browser, so no table call is needed.
 
-Bots are for testing only and have no strategy. After a short pause (about 0.5–1 second) a bot places its setup settlement and road on random legal spots, rolls on its turn, and ends its turn without building, trading, or playing cards. When a 7 is rolled, bots discard random cards and move the robber to a random hex, robbing a random eligible player. Select **Back to multiplayer** on the Start Game panel to leave solo mode.
+Bots are for testing only and have no strategy. After a short pause (about 0.5–1 second) a bot places its setup settlement and road on random legal spots, rolls on its turn, and ends its turn without building, offering trades, or playing cards. Bots do answer your trade offers: they accept when they can afford what you ask for and decline otherwise. When a 7 is rolled, bots discard random cards and move the robber to a random hex, robbing a random eligible player. Select **Back to multiplayer** on the Start Game panel to leave solo mode.
+
+## Board-first layout and trading
+
+The 3D board fills the screen on phones and desktops. Actions are floating icon buttons on the board edge (roll, end turn, road/settlement/city, development cards, and the swap-icon trade button). Your resources and every player's public hand count are shown as slim chips. Short toasts, colored by the acting player, announce actions for every client and for bots.
+
+To trade, tap the swap icon, add cards you give (tap to add, minus to remove) and cards you want, then choose one or more players (or **All players**). Each recipient accepts or declines on their own screen; the first valid accept wins and you see every response. Bank and port trades are on the same sheet. Opponents' actual cards are never shown, only their public card counts.
 
 ## Test the rules integration
 
